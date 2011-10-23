@@ -1,4 +1,4 @@
-bumpo - basic utility module for pygame's object
+bumpo - basic utility module for pygame's objects
 
 Requires: pygame = 1.7
 Optional: pygtk >= 2.0 (some features are missed if not available)
