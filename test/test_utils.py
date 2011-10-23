@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# This file is part of ImparaParole and is released under a MIT-like license
+# This file is part of bumpo and is released under a MIT-like license
 # Copyright (c) 2010  Marco Chieppa (aka crap0101)
 # See the file COPYING.txt in the root directory of this package.
 
