@@ -1,0 +1,5 @@
+include COPYING
+include README
+include INSTALL
+include FONT_LICENSE
+recursive-include test *
