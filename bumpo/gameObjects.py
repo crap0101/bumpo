@@ -690,7 +690,7 @@ class Grid(GenericGameObject):
         Draw the grid on *surface*, and return a sequence of its
         cells rects (to be used, for example, with pygame.display.update).
         """
-        return (cell.draw_on(surface) for cell in self)
+        return list(cell.draw_on(surface) for cell in self)
 
     def iter_pos(self):
         """Yields the coordinates (row, column) of each cell in the table."""
