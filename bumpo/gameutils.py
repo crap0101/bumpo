@@ -9,6 +9,7 @@
 
 import pygame
 import logging
+import math
 from StringIO import StringIO
 
 try:
@@ -263,7 +264,7 @@ def rect_relative_to (rect, relative, other):
 
 
 
-# SURFACES
+# SURFACES & COLORS
 
 def surface_area (surface):
     """Return the area of *surface*."""
@@ -279,6 +280,35 @@ def get_portion(surface, rect):
     portion = pygame.Surface((rect.w, rect.h))
     portion.blit(surface, (0,0), rect)
     return portion
+
+
+def grayscale (surface):
+    """Returns a new 'black $ white' surface from *surface*."""
+    surf = surface.copy()
+    grayscale_ip(surf)
+    return surf
+
+
+def grayscale_ip (surface):
+    """Transform *surface* to grayscale *in place*."""
+    for w in range(surface.get_width()):
+        for h in range(surface.get_height()):
+            r, g, b, a = surface.get_at((w,h))
+            y = int(0.2126 * r + 0.7152 * g + 0.0722 * b)
+            surface.set_at((w,h), (y, y, y, a))
+
+
+def average_color (surface):
+    """Return the average color of *surface*."""
+    return pygame.transform.average_color(surface)
+
+
+def edistance (color1, color2):
+    """Returns the Euclidean distance between *color1* and *color2*."""
+    return math.sqrt(sum(
+            map(lambda pair: math.pow(operator.sub(*pair), 2),
+                zip(color1, color2))))
+
 
 
 # VARIOUS OBJECTS UTILITY

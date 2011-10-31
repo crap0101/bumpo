@@ -300,6 +300,8 @@ class TestSurfaces(unittest.TestCase):
                 self.assertEqual(portion_x.get_at((x,y)), portion_y.get_at((x,y)))
 
 
+
+
 class TestSVG(unittest.TestCase):
 
     def testFromSVG(self):
