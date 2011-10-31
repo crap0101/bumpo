@@ -299,7 +299,37 @@ class TestSurfaces(unittest.TestCase):
             for y in range(img.rect.h):
                 self.assertEqual(portion_x.get_at((x,y)), portion_y.get_at((x,y)))
 
-
+    def test_grayscale (self):
+        def t(surf):
+            return pygame.image.tostring(surf, 'RGBA')
+        def build_fill_surf (w, h, color):
+            surf = pygame.Surface(((w, h)))
+            surf.fill(color)
+            return surf
+        w, h = 300, 300
+        colors = ('green', 'red', 'blue', 'yellow')
+        surfaces = list(build_fill_surf(w, h, pygame.Color(c)) for c in colors)
+        for surf in surfaces:
+            for color in colors:
+                w_points = list(random.randint(0, w-1) for i in range(w/2))
+                h_points = list(random.randint(0, h-1) for i in range(h/2))
+                for x, y in zip(w_points, h_points):
+                    surf.set_at((x,y), pygame.Color(color))
+        images = list(gameObjects.GenericGameObject(s) for s in surfaces)
+        for img in images:
+            surf = img.surface.copy()
+            # grayscale
+            gray = gameutils.grayscale(img.surface)
+            self.assertNotEqual(t(img.surface), t(gray), "ERR0")
+            self.assertEqual(t(img.surface), t(img._original_surface), "ERR1")
+            for x, y in zip(w_points, h_points):
+                self.assertNotEqual(img.surface.get_at((x,y)), gray.get_at((x,y)), "ERR PIX1")
+            # grayscale_ip
+            gameutils.grayscale_ip(img.surface)
+            self.assertNotEqual(t(img.surface), t(img._original_surface), "ERR2")
+            self.assertEqual(t(img.surface), t(gray), "ERR3")
+            for x, y in zip(w_points, h_points):
+                self.assertEqual(img.surface.get_at((x,y)), gray.get_at((x,y)), "ERR PIX2")
 
 
 class TestSVG(unittest.TestCase):

@@ -727,8 +727,7 @@ class TestGridObject(unittest.TestCase):
                              bg_color)
         grid.draw_on(SCREEN)
         for obj in grid:
-            for p in positions:
-                self.assertEqual(SCREEN.get_at(getattr(obj.rect, p)), bg_color)
+            self.assertEqual(SCREEN.get_at(obj.rect.center), cells_color)
         # test moving
         movement = [(10,12),(1,0),(0,3),(-2,-2),(-3,7),(20,5),(5,6),(4,7),(9,11)]
         for m in movement:
