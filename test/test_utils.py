@@ -258,7 +258,7 @@ class TestRects(unittest.TestCase):
                             rect1, rect2, rect_attrs[:delta+1]), retval)
 
 
-class TestSurfaces(unittest.TestCase):
+class TestSurfacesAndColors(unittest.TestCase):
 
     def testGetPortion(self):
         screen = get_screen(600, 400)
@@ -330,6 +330,25 @@ class TestSurfaces(unittest.TestCase):
             self.assertEqual(t(img.surface), t(gray), "ERR3")
             for x, y in zip(w_points, h_points):
                 self.assertEqual(img.surface.get_at((x,y)), gray.get_at((x,y)), "ERR PIX2")
+
+    def test_average (self):
+        colors = {'green':0, 'red':0, 'blue':0, 'yellow':0, 'white':0, 'black':0}
+        for c in colors:
+            colors[c] = pygame.Color(c)
+        surfaces = [pygame.Surface((10,10)) for _ in colors]
+        for surface, color in zip(surfaces, colors):
+            surface.fill(colors[color])
+        for surface in surfaces:
+            ac = gameutils.average_color(surface)
+            self.assertTrue(isinstance(ac, pygame.Color))
+            self.assertEqual(ac, surface.get_at((0,0)))
+
+    def test_distance (self):
+        colors = {'green':0, 'red':0, 'blue':0, 'yellow':0, 'white':0, 'black':0}
+        for c in colors:
+            colors[c] = pygame.Color(c)
+        for c in colors.values():
+            self.assertEqual(int(gameutils.edistance(c, c)), 0)
 
 
 class TestSVG(unittest.TestCase):
@@ -423,7 +442,7 @@ class TestMisc(unittest.TestCase):
 
 def load_tests():
     loader = unittest.TestLoader()
-    test_cases = (TestImages, TestRects, TestSurfaces, TestSVG, TestMisc)
+    test_cases = (TestImages, TestRects, TestSurfacesAndColors, TestSVG, TestMisc)
     return (loader.loadTestsFromTestCase(t) for t in test_cases)
 
 

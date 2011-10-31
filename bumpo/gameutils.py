@@ -301,7 +301,9 @@ def grayscale_ip (surface):
 
 def average_color (surface):
     """Return the average color of *surface*."""
-    return pygame.transform.average_color(surface)
+    alpha = surface.get_at((0,0)).a
+    r, g, b, _ = pygame.transform.average_color(surface)
+    return pygame.Color(r, g, b, alpha)
 
 
 def edistance (color1, color2):
