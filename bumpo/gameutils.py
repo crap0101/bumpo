@@ -10,6 +10,7 @@
 import pygame
 import logging
 import math
+import operator
 from StringIO import StringIO
 
 try:
@@ -283,7 +284,7 @@ def get_portion(surface, rect):
 
 
 def grayscale (surface):
-    """Returns a new 'black $ white' surface from *surface*."""
+    """Returns a new 'black & white' surface from *surface*."""
     surf = surface.copy()
     grayscale_ip(surf)
     return surf
