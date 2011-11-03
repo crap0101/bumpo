@@ -79,6 +79,15 @@ class GenericGameObject (object):
         self.resize(*size)
 
     @property
+    def original_surface (self):
+        """
+        Returns a copy of the object's original surface, i.e. the surface
+        which has been set at time of object creation or by the last call
+        of the *set_surface* method.
+        """
+        return self._original_surface.copy()
+
+    @property
     def compare_value (self):
         """The value used to compare this object."""
         return self._cmp_value
@@ -210,18 +219,23 @@ class GenericGameObject (object):
         self.clamp(in_rect)
         return self.rect
 
+    @staticmethod
+    def _surface_resize (surface, width, height):
+        """Returns a new surface resized at *width* and *height*."""
+        if any(d < 0 for d in (width, height)):
+            raise TypeError("width and height must be two positive integer")
+        try:
+            return pygame.transform.smoothscale(surface, (width, height))
+        except ValueError:
+            return pygame.transform.scale(surface, (width, height))
+
     def resize (self, width, height):
         """
         Resize the object at the new (width, height) dimension.
         *width* and *height* must be two positive integer,
         otherwise TypeError will be raised.
         """
-        if any(d < 0 for d in (width, height)):
-            raise TypeError("width and height must be two positive integer")
-        try:
-            self.surface = pygame.transform.smoothscale(self.surface, (width, height))
-        except ValueError:
-            self.surface = pygame.transform.scale(self.surface, (width, height))
+        self.surface = self._surface_resize(self.surface, width, height)
         self.rect.size = self.surface.get_rect().size
 
     def resize_from_dim(self, length, dim):
@@ -263,13 +277,13 @@ class GenericGameObject (object):
         Rotate the object's surface by *angle* amount. Could be a float value.
         Negative angle amounts will rotate clockwise. *anchor_at* is the rect
         attribute used for anchor the rotated rect (default to 'center').
-        Use the attr self._original_surface for rotation to avoid the surface
+        Use the attr *original_surface* for rotation to avoid the surface
         enlargement and (when many calls to rotate occurs) the consequently
         segfault or raising of pygame error.
         Any blit performed on the object surface will be lost (to avoid
         this use the method set_surface() without args).
         """
-        self.surface = self._original_surface
+        self.surface = self.original_surface
         anchor_point = getattr(self.rect, anchor_at)
         self.surface = pygame.transform.rotate(self.surface, angle)
         #self.surface = pygame.transform.rotozoom(self.surface, angle, 1)
@@ -323,7 +337,7 @@ class GenericGameObject (object):
         Set the object's surface with *surface*. If *surface* is not provided,
         use the actual surface (can be useful, for example, after a blit on
         the object surface to register these changes, updating the
-        self._original_surface attribute.
+        *original_surface* attribute.
         """
         if surface:
             self.surface = surface.copy()

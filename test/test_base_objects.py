@@ -85,6 +85,11 @@ class TestGenericGameObject(unittest.TestCase):
         _r = random.randint
         old_color = (0,0,0,255)
         old_size = (10, 10)
+        _obj = gameObjects.GenericGameObject(pygame.Surface(old_size))
+        self.assertTrue(isinstance(_obj.original_surface, pygame.Surface))
+        self.assertEqual(_obj.original_surface.get_size(), _obj.surface.get_size())
+        self.assertEqual(gameutils.average_color(_obj.original_surface),
+                         gameutils.average_color(_obj.surface))
         for i in range(100):
             obj = gameObjects.GenericGameObject(pygame.Surface(old_size))
             obj.surface.fill(old_color)
