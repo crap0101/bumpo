@@ -693,9 +693,7 @@ class TestGridObject(unittest.TestCase):
         images_path = filter(op_.isfile,
             glob.glob(op_.join(op_.realpath(IMAGES_PATH), '*')))
         r, c, cell_size = 3,5, (12,10)
-        grid = gameObjects.Grid(gameObjects.Image,
-                                {'image_path':images_path.pop(),
-                                 'cmp_value': 2})
+        grid = gameObjects.Grid(gameObjects.Image, (images_path.pop(), 2))
         grid.build(r, c, cell_size)
         for pos, obj in zip(grid.iter_pos(), grid):
             self.assertTrue(obj.rect.size == cell_size)

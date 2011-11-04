@@ -637,21 +637,19 @@ class Cell (Image):
 
 
 class Grid(GenericGameObject):
-    def __init__ (self, fill_with=None, fill_dict_args=None):
+    def __init__ (self, fill_with=None, fill_args=()):
         """
         *fill_with* is the object which will be used for all of the Grid's cell
         *fill_dict_arg* are the arguments used for instantiante the latter.
         Example:
         >>> g = gameObjects.Grid(gameObjects.Image, [pygame.Surface((0,0)), 2])
-        >>> g
-        <ImparaParole.baseObjects.gameObjects.Grid object at 0x150c690>
         """
         super(Grid, self).__init__()
         self._row = 0
         self._col = 0
         self._grid = {}
         self.fill_object = fill_with
-        self.fill_object_args = fill_dict_args or dict()
+        self.fill_object_args = fill_args or dict()
 
     def __contains__ (self, item):
         return item in self._grid.values()
@@ -699,7 +697,7 @@ class Grid(GenericGameObject):
             return
         _topleft = self.rect.topleft
         for pos in self.iter_pos():
-            obj = self.fill_object(**self.fill_object_args)
+            obj = self.fill_object(*self.fill_object_args)
             obj.resize(*cell_size)
             self[pos] = obj
         self.update()
