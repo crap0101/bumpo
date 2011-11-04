@@ -601,14 +601,19 @@ class Cell (Image):
         self.update_item()
         return self.rect
 
-    def resize (self, w, h):
+    def resize (self, w, h, update=True):
+        """
+        Resize the object..
+        If *update* is True, update immediately its item.
+        """
         super(Cell, self).resize(w, h)
-        self.update_item()
+        if update:
+            self.update_item()
 
     def set_item_attrs(self, attrs, update=True):
         """
         Set the item's attr from *attrs*.
-        If *update* is True, update immediately the item.
+        If *update* is True, update immediately its item.
         """
         self._item_attrs = collections.OrderedDict(attrs)
         if update:
