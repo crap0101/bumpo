@@ -15,6 +15,7 @@ import gameutils
 
 import pygame
 import random
+import warnings
 import collections
 # for python < 2.7, create an alias for OrderedDict, a fake object
 # which only have the 'item' method used by the Cell class.
@@ -50,8 +51,8 @@ class GenericGameObject (object):
         self._filepath = None
         self._drawed_surface = None # for *draw_on* and *erase* methods
         self.surface = surface if surface else pygame.Surface((0,0))
-        self._original_surface = self.surface.copy()
         self.rect = self.surface.get_rect()
+        self._original_surface = self.surface.copy()
         self._surround_rect = gameutils.copy_rect(self.rect)
         self._surround_rect_delta = None
         self._surround_rect_perc = None
@@ -644,12 +645,13 @@ class Grid(GenericGameObject):
         Example:
         >>> g = gameObjects.Grid(gameObjects.Image, [pygame.Surface((0,0)), 2])
         """
-        super(Grid, self).__init__()
         self._row = 0
         self._col = 0
         self._grid = {}
         self.fill_object = fill_with
         self.fill_object_args = fill_args or dict()
+        self.rect = pygame.Rect(0,0,0,0)
+        super(Grid, self).__init__()
 
     def __contains__ (self, item):
         return item in self._grid.values()
@@ -667,7 +669,7 @@ class Grid(GenericGameObject):
         return len(self._grid)
 
     def __str__ (self):
-        fill = self.fill_object.__class__.__name__ if self.fill_object else '?'
+        fill = self.fill_object.__name__ if self.fill_object else '?'
         return "Grid object (%s, %d, %d)" % (fill, self._row, self._col)
 
     @property
@@ -685,6 +687,29 @@ class Grid(GenericGameObject):
         for row in range(self._row):
             rows.append(list(self[row, col] for col in range(self._col)))
         return rows
+
+    @property
+    def surface (self):
+        """
+        Returns a copy of the object's surface, i.e. the surface composed
+        of every object's cell.
+        This is a read-only attribute, A Grid's surface can't be set per se,
+        trying to assing something to the *surface* attribute of a Grid object
+        do nothing and cause a warning to be issued.
+        """
+        surf = pygame.Surface(self.size)
+        self.draw_on(surf)
+        return surf
+    @surface.setter
+    def surface (self, surf):
+        """
+        trying to assing something to the *surface* attribute of a Grid object
+        doesn't work. This methos do nothing and cause a warning to be issued
+        (hmm, not yet).
+        """
+        pass
+        #warnings.warn("%s's *surface* attribute assignment is always ignored."
+        #    % self.__class__.__name__)
 
     def build (self, rows, columns, cell_size):
         """Build a *rows* X *columns* grid, with cells of size *cell_size*."""
