@@ -27,6 +27,7 @@ if __name__ == '__main__':
         license='MIT-like License',
         platforms=['platform independent'],
         requires=['pygame(>=1.7)', 'pygtk(>=2.0.0)'],
+        package_dir={'bumpo': 'src'},
         packages = ['bumpo'],
         py_modules=['gameObjects', 'gameutils'])
 

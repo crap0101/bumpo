@@ -643,13 +643,13 @@ class Grid(GenericGameObject):
         *fill_with* is the object which will be used for all of the Grid's cell
         *fill_dict_arg* are the arguments used for instantiante the latter.
         Example:
-        >>> g = gameObjects.Grid(gameObjects.Image, [pygame.Surface((0,0)), 2])
+        >>> g = Grid(gameObjects.Image, [pygame.Surface((0,0)), 2])
         """
         self._row = 0
         self._col = 0
         self._grid = {}
         self.fill_object = fill_with
-        self.fill_object_args = fill_args or dict()
+        self.fill_object_args = fill_args
         self.rect = pygame.Rect(0,0,0,0)
         super(Grid, self).__init__()
 
