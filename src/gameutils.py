@@ -16,8 +16,12 @@ from StringIO import StringIO
 try:
     import gtk
     from gtk import gdk
+    HAVE_GTK = True
 except ImportError, err:
     logging.warning('missing gtk module: %s' % str(err))
+    HAVE_GTK = False
+    import mimetypes
+    mimetypes.init()
 
 
 class FakeSound (object):
@@ -331,11 +335,22 @@ def gobj_collide_at (objects, index, attr='rect'):
 
 # Images handling
 
-def is_svg (filepath):
-    """Return True if *filepath is a svg file, False otherwise,"""
-    ext = 'svg'
-    return (filepath.endswith(ext)
-            or gtk.gdk.pixbuf_get_file_info(filepath)[0]['name'] == ext)
+if HAVE_GTK:
+    # use gtk to check if is a svg image
+    def is_svg (filepath):
+        """Return True if *filepath is a svg file, False otherwise."""
+        ext = 'svg'
+        return (filepath.endswith(ext)
+                or gtk.gdk.pixbuf_get_file_info(filepath)[0]['name'] == ext)
+else:
+    # use module mimetypes
+    def is_svg (filepath):
+        """Return True if *filepath is a svg file, False otherwise."""
+        ext = '.svg'
+        img_type, enc = mimetypes.guess_type(filepath)
+        if img_type is None:
+            return False
+        return ext in mimetypes.guess_all_extensions(img_type)
 
 
 class ImgBuffer (object):
