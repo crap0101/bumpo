@@ -566,7 +566,7 @@ class Cell (Image):
         Returns the object's recs.
         """
         rect = super(Cell, self).draw_on(surface, background)
-        if draw_item:
+        if draw_item and self.item:
             self.item.draw_on(self.surface)
         return rect
 
@@ -828,9 +828,9 @@ class MemoryGrid (Grid):
             self.cover.resize(*self[0,0].rect.size)
 
 
-class GridCell (Image):
+class GridCell (Cell):
     """
-    Specialized Image class which create objects intended to be used
+    Specialized Cell class which create objects intended to be used
     as MemoryGrid's cell objects.
     """
     def __init__ (self, image_path=None, cmp_value=None):

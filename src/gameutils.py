@@ -340,8 +340,8 @@ if HAVE_GTK:
     def is_svg (filepath):
         """Return True if *filepath is a svg file, False otherwise."""
         ext = 'svg'
-        return (filepath.endswith(ext)
-                or gtk.gdk.pixbuf_get_file_info(filepath)[0]['name'] == ext)
+        return (filepath.lower().endswith(ext)
+                or gtk.gdk.pixbuf_get_file_info(filepath)[0]['name'].lower() == ext)
 else:
     # use module mimetypes
     def is_svg (filepath):
@@ -350,7 +350,7 @@ else:
         img_type, enc = mimetypes.guess_type(filepath)
         if img_type is None:
             return False
-        return ext in mimetypes.guess_all_extensions(img_type)
+        return ext in map(str.lower, mimetypes.guess_all_extensions(img_type))
 
 
 class ImgBuffer (object):
