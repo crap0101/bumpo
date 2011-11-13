@@ -585,7 +585,6 @@ class TestCellObject(unittest.TestCase):
         self.assertTrue(obj.draw_on(SCREEN) == obj.rect)
         self.assertTrue(obj.surface.get_at(obj.rect.center) == obj_color)
         obj.rect.center = old_center
-        self.assertRaises(AttributeError, obj.draw_on, SCREEN, draw_item=True)
         obj.add_item(item, {'center': new_center})
         self.assertFalse(obj.rect.center == obj.item.rect.center)
         self.assertTrue(obj.item.rect.center == new_center)
