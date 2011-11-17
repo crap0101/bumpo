@@ -61,6 +61,26 @@ def finddiv (n):
     return n,1
 
 
+# EVENTS
+
+def dont_block (event_to_push=None):
+    """
+    Convenience function to avoid app's freeze-like behaviour when
+    the event queue is empty and pygame.event.get is used in the program's
+    main loop. Call this function assure the presence of an event to be
+    processed; it work checking the event queue and, if empty, push in
+    *event_to_push* (or pygame.USEREVENT if None).
+    """
+    if event_to_push is None:
+        event_to_push = pygame.USEREVENT
+    event = pygame.event.poll()
+    if event.type == pygame.NOEVENT:
+        pygame.event.post(pygame.event.Event(pygame.USEREVENT))
+    else:
+        pygame.event.post(event)
+
+
+
 # GENERAL
 
 def get_attrs_from (attrs, object, raise_error=True):

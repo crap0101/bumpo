@@ -444,7 +444,7 @@ class TextImage (GenericGameObject):
     def __init__ (self, text, font_name, font_size,
                   text_color, bg_color=None, cmp_value=None):
         """
-        Create a TextImage object: *text* is the text to be displayed;
+        Create a TextImage object: *text* is the string to be displayed;
         *font_name* can be either a filename or a font name, in the latter
         case the font must be present in the system, otherwise a random
         available font is used instead; *font_size* is the initial size of
@@ -454,7 +454,7 @@ class TextImage (GenericGameObject):
         """
         self.font_name = font_name
         self.font_size = font_size
-        self.text = str(text)
+        self.text = text
         self.bg_color = bg_color
         self.text_color = text_color
         self.font = None
@@ -495,6 +495,14 @@ class TextImage (GenericGameObject):
         self._build_font(self.font_name, self.font_size)
         self.set_surface(self._build_surface())
         super(TextImage, self).resize(w, h)
+
+    def set_text (self, text):
+        """
+        Set object's text to *text*, then rebuild font and surface.
+        """
+        self.text = text
+        self._build_font(self.font_name, self.font_size)
+        self.set_surface(self._build_surface())
 
 
 # CELL AND GRID CLASSES
