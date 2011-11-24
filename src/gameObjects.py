@@ -49,6 +49,7 @@ class GenericGameObject (object):
         """
         self._from_svg = False
         self._filepath = None
+        self._reload_image_on_resize = False
         self._drawed_surface = None # for *draw_on* and *erase* methods
         self.surface = surface if surface else pygame.Surface((0,0))
         self.rect = self.surface.get_rect()
@@ -64,6 +65,35 @@ class GenericGameObject (object):
     def from_svg (self):
         """True if the object has been created from a svg image."""
         return self._from_svg
+
+    @property
+    def filepath (self):
+        """
+        Return (if any) the path of the file form which the object
+        has been created or None. It's a read-only attribute.
+        """
+        return self._filepath
+
+    @property
+    def reload_image_on_resize (self):
+        """
+        Return the boolean value used by other methods (resize, fit, etc.)
+        used to decide if reload the object's source image before
+        doing their job.
+        Default: False.
+        """
+        return self._reload_image_on_resize
+    @reload_image_on_resize.setter
+    def reload_image_on_resize (self, value):
+        """
+        If set to a true *value*, resizing, fitting or any other operation
+        which cause changing the surface's dimensions will be performed
+        reloading the original image form its file (is the object's *filepath*
+        attribute). If the object's surface were build form an existing surface
+        (i.e. the *filepath* attribute is set to None) this attribute will be
+        ignored by the above-mentioned methods.
+        """
+        self._reload_image_on_resize = bool(value)
 
     @property
     def area (self):
@@ -140,7 +170,8 @@ class GenericGameObject (object):
         return destination.blit(surface, self.rect, clip_area)
 
     def fit (self, rect_or_surface):
-        """Move and resize the object's rect to fit *rect_or_surface*.
+        """
+        Move and resize the object's rect to fit *rect_or_surface*.
         The aspect ratio of the original Rect is preserved, so the new
         rectangle may be smaller than the target in either width or height.
         """
@@ -150,7 +181,8 @@ class GenericGameObject (object):
             self.resize(*self.rect.fit(rect_or_surface).size)
 
     def is_clicked (self, point=None):
-        """Return True if  *point* is inside the object's rect.
+        """
+        Return True if  *point* is inside the object's rect.
         A point along the right or bottom edge is not considered to be
         inside the rectangle. If *point* is not provided use the point value
         got from pygame.mouse.get_pos().
@@ -220,26 +252,23 @@ class GenericGameObject (object):
         self.clamp(in_rect)
         return self.rect
 
-    @staticmethod
-    def _surface_resize (surface, width, height):
-        """Returns a new surface resized at *width* and *height*."""
-        if any(d < 0 for d in (width, height)):
-            raise TypeError("width and height must be two positive integer")
-        try:
-            return pygame.transform.smoothscale(surface, (width, height))
-        except ValueError:
-            return pygame.transform.scale(surface, (width, height))
-
     def resize (self, width, height):
         """
         Resize the object at the new (width, height) dimension.
         *width* and *height* must be two positive integer,
         otherwise TypeError will be raised.
         """
-        self.surface = self._surface_resize(self.surface, width, height)
+        if self.reload_image_on_resize:
+            if self.filepath:
+                if self.from_svg:
+                    surface = gameutils.surface_from_svg(self.filepath, width, height)
+                else:
+                    surface = gameutils.surface_from_file(self.filepath)
+                self.set_surface(surface)
+        self.surface = gameutils.surface_resize(self.surface, width, height)
         self.rect.size = self.surface.get_rect().size
 
-    def resize_from_dim(self, length, dim):
+    def resize_from_dim (self, length, dim):
         """
         Scale the object in relation to *length*, relative to the
         dimension *dim* (width or height). *dim* must be a string ('w' or 'h')
@@ -366,7 +395,6 @@ class GenericGameObject (object):
         else:
             self._surround_rect.center = self.rect.center
             return self._surround_rect
-
     @surround_rect.setter
     def surround_rect (self, rect):
         if not isinstance(rect, pygame.Rect):
@@ -379,8 +407,8 @@ class GenericGameObject (object):
         """
         Set the surround_rect of the object's rect.
         This is a dummy method which set some attribute used to update
-        the surround when the object's rect change.
-        The arguments are optional, but only one at a time must be present,
+        the surround_rect when the object's rect changes.
+        All arguments are optional, but only one at a time must be present,
         raise TypeError otherwise.
         *length* must be an integer, the surround_rect will be created
         adding this value to the object's rect dimensions.
@@ -431,12 +459,6 @@ class Image (GenericGameObject):
         super(Image, self).__init__(surface, cmp_value)
         self._from_svg = _from_svg
         self._filepath = image_path
-
-    def resize (self, width, height):
-        """Resize the object at the new (width, height) dimension."""
-        if self.from_svg:
-            self.surface = gameutils.surface_from_svg(self._filepath, width, height)
-        super(Image, self).resize(width, height)
 
 
 class TextImage (GenericGameObject):
@@ -566,12 +588,12 @@ class Cell (Image):
         if draw:
             self.item.draw_on(self.surface)
 
-    def draw_on(self, surface, background=None, draw_item=False):
+    def draw_on (self, surface, background=None, draw_item=False):
         """
         Draw the object on *surface*. Same as the GenericGameObject's
         draw_on method, but also permit to blit the object's item if
         *draw_item* is set to a true value.
-        Returns the object's recs.
+        Returns the object's rect.
         """
         rect = super(Cell, self).draw_on(surface, background)
         if draw_item and self.item:
@@ -645,7 +667,7 @@ class Cell (Image):
                     setattr(self.item.rect, attr, value)
 
 
-class Grid(GenericGameObject):
+class Grid (GenericGameObject):
     def __init__ (self, fill_with=None, fill_args=()):
         """
         *fill_with* is the object which will be used for all of the Grid's cell
@@ -742,7 +764,7 @@ class Grid(GenericGameObject):
         """
         return list(cell.draw_on(surface) for cell in self)
 
-    def iter_pos(self):
+    def iter_pos (self):
         """Yields the coordinates (row, column) of each cell in the table."""
         for row in range(self._row):
             for col in range(self._col):
@@ -816,9 +838,9 @@ class MemoryGrid (Grid):
     def draw_on_covered (self, surface, cells=None):
         """
         Draw the grid's cover surface on *surface*.
-        If *¢ells* is provided, must be a container filled with games objects
-        or compatible ones; in this case blit them on *surface* instead of the
-        grid's cells. Returns a list of the blitted rects.
+        If *cells* is provided, must be a sequence of games objects or
+        compatible ones; in this case blitting them on *surface* instead
+        of the grid's cells. Returns a list of blitted rects.
         """
         rects = []
         for cell in (cells or self):

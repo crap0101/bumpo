@@ -19,14 +19,13 @@ import unittest
 pwd = op_.dirname(op_.realpath(__file__))
 
 try:
-    import bumpo
+    from bumpo import gameObjects
+    from bumpo import gameutils
 except ImportError:
-    bumpopackdir = op_.join(op_.split(pwd)[0])
+    bumpopackdir = op_.join(op_.split(pwd)[0], 'src')
     sys.path.insert(0, bumpopackdir)
-
-from bumpo import gameObjects
-from bumpo import gameutils
-
+    import gameObjects
+    import gameutils
 
 pygame.init()
 SCREEN = pygame.display.set_mode((640,480))

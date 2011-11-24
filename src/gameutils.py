@@ -307,6 +307,19 @@ def get_portion(surface, rect):
     return portion
 
 
+def surface_resize (surface, width, height):
+    """
+    Returns a new surface resized at *width* and *height*.
+    *width* and *height* must be >= 0, otherwise raise TypeError.
+    """
+    if any(d < 0 for d in (width, height)):
+        raise TypeError("width and height must be two positive integer")
+    try:
+        return pygame.transform.smoothscale(surface, (width, height))
+    except ValueError:
+        return pygame.transform.scale(surface, (width, height))
+
+
 def grayscale (surface):
     """Returns a new 'black & white' surface from *surface*."""
     surf = surface.copy()

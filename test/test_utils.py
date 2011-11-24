@@ -22,13 +22,14 @@ import unittest
 pwd = op_.dirname(op_.realpath(__file__))
 
 try:
-    import bumpo
+    from bumpo import gameObjects
+    from bumpo import gameutils
 except ImportError:
-    bumpopackdir = op_.join(op_.split(pwd)[0])
+    bumpopackdir = op_.join(op_.split(pwd)[0], 'src')
     sys.path.insert(0, bumpopackdir)
-
-from bumpo import gameObjects
-from bumpo import gameutils
+    print bumpopackdir
+    import gameObjects
+    import gameutils
 
 
 pygame.init()
@@ -298,6 +299,15 @@ class TestSurfacesAndColors(unittest.TestCase):
         for x in range(img.rect.w):
             for y in range(img.rect.h):
                 self.assertEqual(portion_x.get_at((x,y)), portion_y.get_at((x,y)))
+
+    def test_resize (self):
+        def get_random_dims (max_length):
+            return tuple(random.randint(1, max_length) for fdim in 'wh')
+        orig_surfs = [pygame.Surface(get_random_dims(1000)) for _ in range(100)]
+        for surf in orig_surfs:
+            w, h = get_random_dims(1000)
+            new_surf = gameutils.surface_resize(surf, w, h)
+            self.assertEqual(new_surf.get_size(), (w, h))
 
     def test_grayscale (self):
         def t(surf):
