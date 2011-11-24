@@ -15,7 +15,6 @@ import gameutils
 
 import pygame
 import random
-import warnings
 import collections
 # for python < 2.7, create an alias for OrderedDict, a fake object
 # which only have the 'item' method used by the Cell class.
@@ -112,7 +111,7 @@ class GenericGameObject (object):
     @property
     def original_surface (self):
         """
-        Returns a copy of the object's original surface, i.e. the surface
+        Returns a _copy_ of the object's original surface, i.e. the surface
         which has been set at time of object creation or by the last call
         of the *set_surface* method.
         """
@@ -531,8 +530,8 @@ class TextImage (GenericGameObject):
 
 class Cell (Image):
     """
-    A Cell Class. used to create object that may contains
-    another game's object (only one at a time) to be used together.
+    A Cell Class. used to create objects in a strong relation with
+    another game object (only one at a time).
     """
     def __init__ (self, image_path, item=None, cmp_value=None):
         self.item = item
@@ -580,7 +579,7 @@ class Cell (Image):
         If *draw* is a true value, *item* will be draw immediately on the
         Cell's surface (default to False).
         This object can contain only one item at a time. Multiple calls of
-        add_item cause the overwrite of the previously set item (if any).
+        add_item cause the previously item the be overwritten.
         """
         self.item = item
         self.set_item_attrs(attrs or {'center':None})
@@ -721,25 +720,16 @@ class Grid (GenericGameObject):
     @property
     def surface (self):
         """
-        Returns a copy of the object's surface, i.e. the surface composed
-        of every object's cell.
-        This is a read-only attribute, A Grid's surface can't be set per se,
-        trying to assing something to the *surface* attribute of a Grid object
-        do nothing and cause a warning to be issued.
+        Returns a _copy_ of the object's surface, i.e. the surface composed
+        of every object's cell surface. This is a read-only attribute.
         """
         surf = pygame.Surface(self.size)
         self.draw_on(surf)
         return surf
-    @surface.setter
-    def surface (self, surf):
-        """
-        trying to assing something to the *surface* attribute of a Grid object
-        doesn't work. This methos do nothing and cause a warning to be issued
-        (hmm, not yet).
-        """
+    @surface.setter # XXX + TODO + FIXME: shit
+    def surface (self, surface):
+        """Does nothing, """
         pass
-        #warnings.warn("%s's *surface* attribute assignment is always ignored."
-        #    % self.__class__.__name__)
 
     def build (self, rows, columns, cell_size):
         """Build a *rows* X *columns* grid, with cells of size *cell_size*."""

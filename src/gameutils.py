@@ -351,7 +351,7 @@ def edistance (color1, color2):
 
 
 
-# VARIOUS OBJECTS UTILITY
+# OBJECTS UTILITY
 
 def gobj_collide_at (objects, index, attr='rect'):
     """
@@ -368,17 +368,13 @@ def gobj_collide_at (objects, index, attr='rect'):
 
 # Images handling
 
-if HAVE_GTK:
-    # use gtk to check if is a svg image
-    def is_svg (filepath):
-        """Return True if *filepath is a svg file, False otherwise."""
+def is_svg (filepath):
+    """Return True if *filepath* is a svg file, False otherwise."""
+    if HAVE_GTK:
         ext = 'svg'
         return (filepath.lower().endswith(ext)
                 or gtk.gdk.pixbuf_get_file_info(filepath)[0]['name'].lower() == ext)
-else:
-    # use module mimetypes
-    def is_svg (filepath):
-        """Return True if *filepath is a svg file, False otherwise."""
+    else:
         ext = '.svg'
         img_type, enc = mimetypes.guess_type(filepath)
         if img_type is None:
