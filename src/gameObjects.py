@@ -59,6 +59,8 @@ class GenericGameObject (object):
         self._cmp_value = cmp_value if cmp_value is not None else id(self)
         self.actions = collections.defaultdict(list)
         self.velocity = [5, 7]
+        self.start_attr = 'center'
+        self.start_position = self.rect.center
 
     @property
     def from_svg (self):
@@ -187,6 +189,21 @@ class GenericGameObject (object):
         got from pygame.mouse.get_pos().
         """
         return self.rect.collidepoint(point or pygame.mouse.get_pos())
+
+    def goto_start(self):
+        """
+        Set the object's rect center at the value of its
+        *start_position* attribute.
+        """
+        setattr(self.rect, self.start_attr, self.start_position)
+
+    def update_start_position (self, rect_attr='center'):
+        """
+        Set the object's *start_position* attribute to the
+        object's rect attribute *rect_attr* (default to 'center').
+        """
+        self.start_attr = rect_attr
+        self.start_position = getattr(self.rect, rect_attr)
 
     def move (self, x, y):
         """
@@ -867,27 +884,146 @@ class GridCell (Cell):
         self._covered ^= True
 
 
-class MovingTextButton(TextImage):
-    """
-    TextImage derived Class with some methods for simplify object's movements.
-    """
-    def __init__(self, *args, **kword):
-        super(MovingTextButton, self).__init__(*args, **kword)
-        self.start_attr = 'center'
-        self.start_position = self.rect.center
 
-    def goto_start(self):
-        """
-        Set the object's rect center at the value of its
-        *start_position* attribute.
-        """
-        setattr(self.rect, self.start_attr, self.start_position)
+# BOX CLASSES
 
-    def update_start_position (self, rect_attr='center'):
-        """
-        Set the object's *start_position* attribute to the
-        object's rect attribute *rect_attr* (default to 'center').
-        """
-        self.start_attr = rect_attr
-        self.start_position = getattr(self.rect, rect_attr)
+class Box (object):
+    def __init__ (self, left=0, top=0, width=0, height=0):
+        self.rect = pygame.Rect(left, top, width, height)
+        self._items = []
 
+    def add_item (self, item, insert=False):
+        """
+        Add *item* to Box.
+        If *insert* is not False (default) place *items* before
+        the index *insert* (a number).
+        """
+        if insert is not False:
+            self._items.insert(insert, item)
+        else:
+            self._items.append(item)
+
+    def draw_on (self, surface, background=None):
+        """
+        Draw the object's items on *surface*. If *background* is not None,
+        it must be a surface intended to be drawed on *surface* _before_
+        the object's surface (and at the same position).
+        The portion of *surface* drawed will be saved for and repainted by
+        the *erase* method if no other surface inteded to be drawed are
+        passed to the latter method. Note that the portion of the original
+        surface is saved _before_ blitting *background*.
+        """
+        self._drawed_surface = gameutils.get_portion(surface, self.rect)
+        if background:
+            surface.blit(background, self.rect, self.rect)
+        for item in self._items:
+            item.draw_on(surface)
+
+    def erase (self, destination, surface=None, clip_area=None):
+        """
+        Erase the object's surface from *destination*, drawing *surface*
+        in its rect's area. If no *surface* is passed, or not a True value,
+        the surface generated from a previously call to the *draw_on* method
+        is used instead, otherwise raise a TypeError. *clip_area* represents
+        a smaller portion of the destination surface to draw.
+        """
+        surface = surface or self._drawed_surface
+        if not surface:
+            raise TypeError("Need a Surface to draw!")
+        return destination.blit(surface, self.rect, clip_area)
+
+    def items (self):
+        """Returns the Box's items."""
+        return self._items[:]
+
+    def move (self, x, y):
+        """
+        Move the object's rect and its items by the given offset.
+        *x* and *y* can be any integer value, positive or negative.
+        Items must provide a *move* method (same signature).
+        Returns the moved rect.
+        """
+        self.rect = self.rect.move(x, y)
+        self.update_items()
+        return self.rect
+
+    def move_at (self, position, anchor_at='center'):
+        """
+        Move the object's rect and its items at *position*.
+        *anchor_at* (default 'center') must be a string representing
+        a valid rect attribute and is used to determine the new position.
+        Items must provide a *move_at* method (same signature).
+        """
+        setattr(self.rect, anchor_at, position)
+        self.update_items()
+
+    def resize (self, w, h):
+        """
+        Try to resize the box and it's items at *w* and *h* size.
+        Items are fit inside trying to preserving proprortions and
+        the box follow their bounding, so the new box's size can be
+        smaller in respect of the chosen *w* and *h*.
+        Returns a _copy_ of the new box's rect.
+        """
+        old_w, old_h = self.rect.size
+        self.rect.size = self.rect.fit(pygame.Rect(0,0,w,h)).size
+        nw, nh = self.rect.size
+        for item in self._items:
+            new_w, new_h = item.rect.w * nw / old_w, item.rect.h * nh / old_h
+            item.resize(new_w, new_h)
+        self.update_items()
+        return gameutils.copy_rect(self.rect)
+
+    def update_item (self):
+        """To be implemented in subclasses."""
+        pass
+
+
+class Hbox (Box):
+    def __init__ (self, anchor_point='mid'):
+        """Horizontal box. mid top bottom"""
+        assert anchor_point in ('mid', 'top', 'bottom')
+        self.anchor_point = anchor_point
+        self.anchor_map = {'mid':'midleft', 'top':'topleft', 'bottom':'bottomleft'}
+        super(Hbox, self).__init__()
+
+    def add_item (self, item, insert=False):
+        super(Hbox, self).add_item(item, insert)
+        w = sum(item.rect.w for item in self._items)
+        h = sum(item.rect.h for item in self._items)
+        old_anchor = getattr(self.rect, self.anchor_map[self.anchor_point])
+        self.rect.size = (w, h)
+        setattr(self.rect, self.anchor_map[self.anchor_point], old_anchor)
+        self.update_items()
+
+    def update_items (self):
+        point = self.anchor_map[self.anchor_point]
+        x, y = getattr(self.rect, point)
+        for item in self._items:
+            item.move_at((x, y), point)
+            x += item.rect.w
+
+
+class Vbox (Box):
+    def __init__ (self, anchor_point='center'):
+        """Vertical box. left center right."""
+        assert anchor_point in ('left', 'center', 'right')
+        self.anchor_point = anchor_point
+        self.anchor_map = {'left':'topleft', 'center':'midtop', 'right':'topright'}
+        super(Vbox, self).__init__()
+
+    def add_item (self, item, insert=False):
+        super(Vbox, self).add_item(item, insert)
+        w = sum(item.rect.w for item in self._items)
+        h = sum(item.rect.h for item in self._items)
+        old_anchor = getattr(self.rect, self.anchor_map[self.anchor_point])
+        self.rect.size = (w, h)
+        setattr(self.rect, self.anchor_map[self.anchor_point], old_anchor)
+        self.update_items()
+
+    def update_items (self):
+        point = self.anchor_map[self.anchor_point]
+        x, y = getattr(self.rect, point)
+        for item in self._items:
+            item.move_at((x, y), point)
+            y += item.rect.h

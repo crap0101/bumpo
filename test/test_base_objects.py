@@ -536,7 +536,7 @@ class TestTextImageObject(unittest.TestCase):
                     self.assertEqual(pygame.image.tostring(obj1.surface, "RGB"),
                                      pygame.image.tostring(obj2.surface, "RGB"))
 
-    def testMovingTextButton(self):
+    def testMovement(self):
         _r = random.randint
         text = "jnOJojOjOJ"
         mtb = []
@@ -544,7 +544,7 @@ class TestTextImageObject(unittest.TestCase):
             for font_path in self.images_path:
                 text_color = (_r(0, 255),_r(0, 255),_r(0, 255), 255)
                 bg_color = (_r(0, 255),_r(0, 255),_r(0, 255), 255)
-                mtb.append(gameObjects.MovingTextButton(
+                mtb.append(gameObjects.TextImage(
                     text, _DEF_FONT, _DEF_FONT_SIZE, text_color, bg_color))
         for b in mtb:
             center = b.rect.center
@@ -764,11 +764,59 @@ class TestGridObject(unittest.TestCase):
         for p, x in enumerate(t):
             self.assertEqual(gc[p].covered, bool(not x))
 
+
+class TestBox (unittest.TestCase):
+
+    def testBasicBox (self):
+        box = gameObjects.Box()
+        self.assertFalse(box.items())
+        for x in range(20):
+            args = dict(left=0, top=0, width=0, height=0)
+            for k in args:
+                args[k] = random.randint(0, 500)
+            b = gameObjects.Box(**args)
+            r = b.rect
+            for k in args:
+                self.assertEqual(args[k], getattr(r, k))
+            b1 = gameObjects.Box(**args)
+            for i in range(x):
+                b1.add_item(i)
+            self.assertEqual(len(b1.items()), x)
+
+    def testVHbox(self):
+        self.images_path = filter(op_.isfile,
+            glob.glob(op_.join(op_.realpath(IMAGES_PATH), '*')))
+        vbox = gameObjects.Vbox()
+        hbox = gameObjects.Hbox()
+        for path in self.images_path: 
+            hbox.add_item(gameObjects.Image(path))
+            vbox.add_item(gameObjects.Image(path))
+        self.assertEqual(len(vbox.items()), len(self.images_path))
+        self.assertEqual(len(hbox.items()), len(self.images_path))
+        for vitem, hitem in zip(vbox.items(), hbox.items()):
+            self.assertTrue(vbox.rect.contains(vitem.rect))
+            self.assertTrue(hbox.rect.contains(hitem.rect))
+        w, h = SCREEN.get_size()
+        rects = tuple(pygame.Rect(0, 0, w/i, h/i) for i in range(1, 5))
+        for rect in rects:
+            vbox.resize(*rect.size)
+            hbox.resize(*rect.size)
+            for vitem, hitem in zip(vbox.items(), hbox.items()):
+                self.assertTrue(vbox.rect.contains(vitem.rect))
+                self.assertTrue(hbox.rect.contains(hitem.rect))
+                rect.topleft = vbox.rect.topleft
+                self.assertTrue(rect.contains(vitem.rect))
+                rect.topleft = hbox.rect.topleft
+                self.assertTrue(rect.contains(hitem.rect))
+
+
+
+
 def load_tests():
     loader = unittest.TestLoader()
     test_cases = (TestGenericGameObject, TestGenericGameObjectOnPaint,
                   TestImageObject, TestTextImageObject,
-                  TestCellObject, TestGridObject)
+                  TestCellObject, TestGridObject, TestBox)
     return (loader.loadTestsFromTestCase(t) for t in test_cases)
 
 

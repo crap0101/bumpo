@@ -27,7 +27,6 @@ try:
 except ImportError:
     bumpopackdir = op_.join(op_.split(pwd)[0], 'src')
     sys.path.insert(0, bumpopackdir)
-    print bumpopackdir
     import gameObjects
     import gameutils
 
