@@ -870,8 +870,8 @@ class GridCell (Cell):
     Specialized Cell class which create objects intended to be used
     as MemoryGrid's cell objects.
     """
-    def __init__ (self, image_path=None, cmp_value=None):
-        super(GridCell, self).__init__(image_path, cmp_value)
+    def __init__ (self, image_path=None, item=None, cmp_value=None):
+        super(GridCell, self).__init__(image_path, item, cmp_value)
         self._covered = True
 
     @property
