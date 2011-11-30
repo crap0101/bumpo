@@ -48,7 +48,7 @@ class GenericGameObject (object):
         """
         self._from_svg = False
         self._filepath = None
-        self._reload_image_on_resize = False
+        self._reload_image_on_resize = True #False
         self._drawed_surface = None # for *draw_on* and *erase* methods
         self.surface = surface if surface else pygame.Surface((0,0))
         self.rect = self.surface.get_rect()
@@ -163,7 +163,8 @@ class GenericGameObject (object):
         in its rect's area. If no *surface* is passed, or not a True value,
         the surface generated from a previously call to the *draw_on* method
         is used instead, otherwise raise a TypeError. *clip_area* represents
-        a smaller portion of the destination surface to draw.
+        a smaller portion of the destination surface to draw (generally should
+        be the object's rect).
         """
         surface = surface or self._drawed_surface
         if not surface:
