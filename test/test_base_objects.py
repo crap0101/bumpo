@@ -644,19 +644,23 @@ class TestGridObject(unittest.TestCase):
         _r = random.randint
         for i in range(20):
             h, w = _r(1, 100), _r(1, 100)
-            cell_size = 13
-            grid = gameObjects.Grid()
-            grid.build(w, h, cell_size)
+            cell_size = _r(8,23), _r(8,23)
+            grid = gameObjects.Grid(w, h)
             self.assertTrue(grid.size == (0, 0))
-            self.assertTrue(len(grid) == h * w)
-            self.assertTrue(len(grid.columns) == h)
-            self.assertTrue(len(grid.rows) == w)
+            grid.build(gameObjects.GenericGameObject, cell_size=cell_size)
+            self.assertEqual(grid.size, (h*cell_size[0], w*cell_size[1]))
+            self.assertEqual(len(grid), h * w)
+            self.assertEqual(len(grid.columns), h)
+            self.assertEqual(len(grid.rows), w)
+            self.assertEqual(grid.n_cols, h)
+            self.assertEqual(grid.n_rows, w)
+            for cell in grid:
+                self.assertEqual(cell.size, cell_size)
 
     def testItems(self):
         _r = random.randint
-        grid = gameObjects.Grid()
         h, w = 12, 17
-        grid.build(w, h, None)
+        grid = gameObjects.Grid(w, h)
         p = 0
         for x in range(w):
             for y in range(h):
@@ -691,16 +695,19 @@ class TestGridObject(unittest.TestCase):
         images_path = filter(op_.isfile,
             glob.glob(op_.join(op_.realpath(IMAGES_PATH), '*')))
         r, c, cell_size = 3,5, (12,10)
-        grid = gameObjects.Grid(gameObjects.Image, (images_path.pop(), 2))
-        grid.build(r, c, cell_size)
+        grid = gameObjects.Grid(r, c)
+        self.assertFalse(grid.isfull)
+        grid.build(gameObjects.Image, [images_path.pop()], cell_size=cell_size)
         for pos, obj in zip(grid.iter_pos(), grid):
             self.assertTrue(obj.rect.size == cell_size)
             self.assertTrue(obj.rect.width == cell_size[0])
             self.assertTrue(obj.rect.height == cell_size[1])
             self.assertEqual(pygame.image.tostring(grid[pos].surface, "RGB"),
                              pygame.image.tostring(obj.surface, "RGB"))
-        grid.update()
+        self.assertTrue(grid.isfull)
         self.assertEqual(grid.area, c * r * obj.rect.width * obj.rect.height)
+        self.assertEqual(grid, grid)
+        self.assertEqual(grid, grid.copy())
         # other tests for size & co.
         _new_size = (grid.rect.width / 2,grid.rect.width / 2)
         grid.size = _new_size

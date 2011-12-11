@@ -10,7 +10,9 @@
 import pygame
 import logging
 import math
+import random
 import operator
+import itertools as it
 from StringIO import StringIO
 
 try:
@@ -288,13 +290,21 @@ def rect_relative_to (rect, relative, other):
 
 
 
-
 # SURFACES & COLORS
 
-def surface_area (surface):
-    """Return the area of *surface*."""
-    w, h = surface.get_size()
-    return w * h
+
+def average_color (surface):
+    """Return the average color of *surface*."""
+    alpha = surface.get_at((0,0)).a
+    r, g, b, _ = pygame.transform.average_color(surface)
+    return pygame.Color(r, g, b, alpha)
+
+
+def edistance (color1, color2):
+    """Returns the Euclidean distance between *color1* and *color2*."""
+    return math.sqrt(sum(
+            map(lambda pair: math.pow(operator.sub(*pair), 2),
+                zip(color1, color2))))
 
 
 def get_portion(surface, rect):
@@ -305,19 +315,6 @@ def get_portion(surface, rect):
     portion = pygame.Surface((rect.w, rect.h))
     portion.blit(surface, (0,0), rect)
     return portion
-
-
-def surface_resize (surface, width, height):
-    """
-    Returns a new surface resized at *width* and *height*.
-    *width* and *height* must be >= 0, otherwise raise TypeError.
-    """
-    if any(d < 0 for d in (width, height)):
-        raise TypeError("width and height must be two positive integer")
-    try:
-        return pygame.transform.smoothscale(surface, (width, height))
-    except ValueError:
-        return pygame.transform.scale(surface, (width, height))
 
 
 def grayscale (surface):
@@ -336,18 +333,28 @@ def grayscale_ip (surface):
             surface.set_at((w,h), (y, y, y, a))
 
 
-def average_color (surface):
-    """Return the average color of *surface*."""
-    alpha = surface.get_at((0,0)).a
-    r, g, b, _ = pygame.transform.average_color(surface)
-    return pygame.Color(r, g, b, alpha)
+def laplacian (surface):
+    """Returns a new surface appling the laplacian algorithm to *surface*."""
+    return pygame.transform.laplacian(surface)
 
 
-def edistance (color1, color2):
-    """Returns the Euclidean distance between *color1* and *color2*."""
-    return math.sqrt(sum(
-            map(lambda pair: math.pow(operator.sub(*pair), 2),
-                zip(color1, color2))))
+def surface_area (surface):
+    """Return the area of *surface*."""
+    w, h = surface.get_size()
+    return w * h
+
+
+def surface_resize (surface, width, height):
+    """
+    Returns a new surface resized at *width* and *height*.
+    *width* and *height* must be >= 0, otherwise raise TypeError.
+    """
+    if any(d < 0 for d in (width, height)):
+        raise TypeError("width and height must be two positive integer")
+    try:
+        return pygame.transform.smoothscale(surface, (width, height))
+    except ValueError:
+        return pygame.transform.scale(surface, (width, height))
 
 
 
@@ -419,3 +426,185 @@ def surface_from_file (filepath):
     """
     return pygame.image.load(filepath.encode('utf-8')).convert_alpha()
 
+
+# MISC
+
+
+class Table (object):
+    def __init__ (self, rows, columns, empty=None, seq=()):
+        """
+        Create a Table of *row* x *columns* size.
+        *empty* is the value for the empty cells (default None).
+        If *seq* is provided, must be a sequence; the table will be
+        populated with it's items (missing positions are filled
+        using *empty*).
+        """
+        super(Table, self).__init__()
+        self._row = rows
+        self._col = columns
+        self._empty = empty
+        self._grid = dict(
+            it.takewhile(lambda args: args[0] != empty,
+                         it.izip_longest(self.iter_pos(), seq, fillvalue=empty)))
+
+    def __contains__ (self, item):
+        return item in self._grid.values()
+
+    def __eq__ (self, other):
+        for pos, value in self.items():
+            if other[pos] != value:
+                return False
+        return True
+
+    def __ne__ (self, other):
+        return not (self == other)
+
+    def __getitem__(self, item):
+        return self._grid[item]
+
+    def __setitem__ (self, item, value):
+        self._grid[item] = value
+
+    def __iter__(self):
+        return iter(self._grid[pos] for pos in self.iter_pos())
+
+    def __len__ (self):
+        return len(self._grid)
+
+    def __str__ (self):
+        return "Table object (%d, %d) at %s" % (self._row, self._col, hex(id(self)))
+
+    @property
+    def empty (self):
+        """Table's 'empty' value."""
+        return self._empty
+
+    @property
+    def isfull (self):
+        """Return True if the table has been completely filled."""
+        for value in self.values():
+            if value == self.empty:
+                return False
+        return True
+
+    @property
+    def columns (self):
+        """The table's columns, as a list of lists."""
+        cols = []
+        for col in range(self._col):
+            cols.append(list(self[row, col] for row in range(self._row)))
+        return cols
+
+    @property
+    def rows (self):
+        """The table's rows, as a list of lists."""
+        rows = []
+        for row in range(self._row):
+            rows.append(list(self[row, col] for col in range(self._col)))
+        return rows
+
+    @property
+    def n_cols (self):
+        """Number of table's columns."""
+        return self._col
+
+    @property
+    def n_rows (self):
+        """Number of table's rows."""
+        return self._row
+
+    def copy (self):
+        """Returns a copy of the table."""
+        new_table = Table(self._row, self._col, self.empty)
+        for pos, value in self.items():
+            new_table[pos] = value
+        return new_table
+
+    def diagonal (self, row=0, col=0, topright=False):
+        """
+        Returns a sequence of the table's values for the diagonal
+        starting at *row* and *col*.
+        *row* and *col* default to zero, i.e. returns the major diagonal.
+        If *topright* is True, return the topright-to-bottomleft diagonal.
+        Raise KeyError for *row* or *col* values out of index.
+        """
+        values = []
+        endcol = (self._col, -1)[topright]
+        stepcol = (1, -1)[topright]
+        for pos in zip(range(row, self._row), range(col, endcol, stepcol)):
+            values.append(self[pos])
+        return values
+
+    def free (self):
+        """Yields the table's empty positions."""
+        for pos, value in self.items():
+            if value == self.empty:
+                yield pos
+
+    def get (self, symbol):
+        """Yelds the table's positions which holds *symbol*."""
+        for pos, item in self.items():
+            if item == symbol:
+                yield pos
+
+    def items (self):
+        """Yields pairs of ((row, col), value) for each cell in the table."""
+        for pos in self.iter_pos():
+            yield pos, self[pos]
+
+    def iter_pos (self):
+        """Yields the coordinates (row, column) of each cell in the table."""
+        for row in range(self._row):
+            for col in range(self._col):
+                yield row, col
+
+    def major_diagonal (self):
+        """Returns the values on the table's major (or main) diagonal.""" 
+        return self.diagonal()
+
+    def minor_diagonal (self):
+        """Returns the values on the table's minor diagonal.""" 
+        values = []
+        for pos in zip(range(self._row), range(self._col-1, -1, -1)):
+            values.append(self[pos])
+        return values
+
+    def pprint (self, format=None):
+        """Pretty print row-by-row using *format* or the default one."""
+        format = format or "%s " * self._col
+        for row in self.rows:
+            print format % tuple(row)            
+
+    def reflected_h (self):
+        """Returns a (horizontal) reflected _copy_ of the table."""
+        seq = it.chain(*list(x[::-1] for x in self.rows))
+        return Table(self._row, self._col, empty=self.empty, seq=seq)
+
+    def reflected_v (self):
+        """Returns a (vertical) reflected _copy_ of the table."""
+        seq = it.chain(*self.rows[::-1])
+        return Table(self._row, self._col, empty=self.empty, seq=seq)
+
+    def rotated (self):
+        """Return a rotated _copy_ of the table."""
+        seq = it.chain(*list(x[::-1] for x in zip(*self.rows)))
+        return Table(self._col, self._row, empty=self.empty, seq=seq)
+
+    def shuffle (self):
+        cells = list(x for x in self)
+        random.shuffle(cells)
+        for pos in self.iter_pos():
+            self[pos] = cells.pop()
+        assert not cells
+
+    def transposed (self):
+        """Returns a transposed _copy_ of the table."""
+        new = Table(self._col, self._row)
+        for pos, val in zip(new.iter_pos(), it.chain(*self.columns)):
+            new[pos] = val
+        return new
+
+    def values (self):
+        """Yields the value of each cell in the table."""
+        for _, value in self.items():
+            yield value

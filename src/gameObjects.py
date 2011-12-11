@@ -12,6 +12,7 @@ various type of game objects.
 """
 
 import gameutils
+from gameutils import Table
 
 import pygame
 import random
@@ -684,56 +685,21 @@ class Cell (Image):
                     setattr(self.item.rect, attr, value)
 
 
-class Grid (GenericGameObject):
-    def __init__ (self, fill_with=None, fill_args=()):
-        """
-        *fill_with* is the object which will be used for all of the Grid's cell
-        *fill_dict_arg* are the arguments used for instantiante the latter.
-        Example:
-        >>> g = Grid(gameObjects.Image, [pygame.Surface((0,0)), 2])
-        """
-        self._row = 0
-        self._col = 0
-        self._grid = {}
-        self.fill_object = fill_with
-        self.fill_object_args = fill_args
+class Grid (GenericGameObject, Table):
+    def __init__ (self, rows, columns, empty=None, seq=()):
+        """Make a Grid object."""
         self.rect = pygame.Rect(0,0,0,0)
-        super(Grid, self).__init__()
+        Table.__init__(self, rows, columns)
 
-    def __contains__ (self, item):
-        return item in self._grid.values()
+    def __eq__ (self, other):
+        return Table.__eq__(self, other)
 
-    def __getitem__(self, item):
-        return self._grid[item]
-
-    def __setitem__ (self, item, value):
-        self._grid[item] = value
-
-    def __iter__(self):
-        return iter(self._grid[pos] for pos in self.iter_pos())
-
-    def __len__ (self):
-        return len(self._grid)
+    def __ne__ (self, other):
+        return not (self == other)
 
     def __str__ (self):
         fill = self.fill_object.__name__ if self.fill_object else '?'
         return "Grid object (%s, %d, %d)" % (fill, self._row, self._col)
-
-    @property
-    def columns (self):
-        """The columns of the grid, as a list of lists."""
-        cols = []
-        for col in range(self._col):
-            cols.append(list(self[row, col] for row in range(self._row)))
-        return cols
-
-    @property
-    def rows (self):
-        """The rows of the grid, as a list of lists."""
-        rows = []
-        for row in range(self._row):
-            rows.append(list(self[row, col] for col in range(self._col)))
-        return rows
 
     @property
     def surface (self):
@@ -749,19 +715,14 @@ class Grid (GenericGameObject):
         """Does nothing, """
         pass
 
-    def build (self, rows, columns, cell_size):
-        """Build a *rows* X *columns* grid, with cells of size *cell_size*."""
-        self._grid = {}
-        self._row = rows
-        self._col = columns
-        if not self.fill_object:
-            for pos in self.iter_pos():
-                self[pos] = None
-            return
+    def build (self, fill_with, fill_args=(), fill_kwords=None, cell_size=None):
+        """Build the grid with cells .... TODO WRITE DOC.... size *cell_size*."""
         _topleft = self.rect.topleft
+        kw = {} if not fill_kwords else fill_kwords
         for pos in self.iter_pos():
-            obj = self.fill_object(*self.fill_object_args)
-            obj.resize(*cell_size)
+            obj = fill_with(*fill_args, **kw)
+            if cell_size:
+                obj.resize(*cell_size)
             self[pos] = obj
         self.update()
 
@@ -771,22 +732,6 @@ class Grid (GenericGameObject):
         cells rects (to be used, for example, with pygame.display.update).
         """
         return list(cell.draw_on(surface) for cell in self)
-
-    def iter_pos (self):
-        """Yields the coordinates (row, column) of each cell in the table."""
-        for row in range(self._row):
-            for col in range(self._col):
-                yield row, col
-
-    def items (self):
-        """Yields pairs of ((row, col), value) for each cell in the table."""
-        for pos in self.iter_pos():
-            yield pos, self[pos]
-
-    def values (self):
-        """Yields the value of each cell in the table."""
-        for _, value in self.items():
-            yield value
 
     def move (self, x, y):
         """Move the grid by (*x*, *y*)."""
@@ -816,11 +761,7 @@ class Grid (GenericGameObject):
 
     def shuffle (self):
         """Shuffle the grid's cells."""
-        cells = list(x for x in self)
-        random.shuffle(cells)
-        for pos in self.iter_pos():
-            self[pos] = cells.pop()
-        assert not cells
+        super(Grid, self).shuffle()
         self.update()
 
     def update (self):
@@ -838,9 +779,9 @@ class Grid (GenericGameObject):
 
 class MemoryGrid (Grid):
     """Specific Grid class for Memory game."""
-    def __init__ (self, nrows, ncolumns, cell_size):
-        super(MemoryGrid, self).__init__()
-        self.build(nrows, ncolumns, cell_size)
+    def __init__ (self, nrows, ncolumns, cell_size=None):
+        super(MemoryGrid, self).__init__(nrows, ncolumns)
+        self.build(GenericGameObject, cell_size=cell_size)
         self.cover = None
 
     def draw_on_covered (self, surface, cells=None):
