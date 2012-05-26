@@ -25,7 +25,7 @@ try:
     from bumpo import gameObjects
     from bumpo import gameutils
 except ImportError:
-    bumpopackdir = op_.split(pwd)[0]
+    bumpopackdir = op_.join(op_.split(pwd)[0], 'src')
     sys.path.insert(0, bumpopackdir)
     import gameObjects
     import gameutils

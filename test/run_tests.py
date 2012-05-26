@@ -15,7 +15,7 @@ import unittest
 if __name__ == '__main__':
     pwd = op_.dirname(op_.realpath(__file__))
     os.chdir(pwd)
-    basepackdir = op_.split(pwd)[0]
+    basepackdir = op_.join(op_.split(pwd)[0], 'src')
     sys.path.insert(0, basepackdir)
 
     reg = re.compile(r'^test_.*\.py$')
