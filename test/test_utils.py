@@ -5,457 +5,367 @@
 # See the file COPYING.txt in the root directory of this package.
 
 
-import os
-import re
-import sys
+# std imports
+from collections import defaultdict
+import exceptions
 import glob
-import random
-import string
+import itertools as it
 import operator
+import os
 import os.path as op_
-import itertools as it_
+import random
+from random import choice
+import re
+import string
+import shutil
+import sys
+import tempfile
+import unittest
+# external imports
 import pygame
 from pygame.locals import *
-from collections import defaultdict
-import unittest
+
 
 pwd = op_.dirname(op_.realpath(__file__))
 
 try:
-    from bumpo import gameObjects
-    from bumpo import gameutils
+    import bumpo.plugins
+    from bumpo import gameObjects, baseObjects, gameUtils, const
+    try:
+        from bumpo.plugins import gtkGameObject
+        HAVE_GTK = True
+    except ImportError:
+        HAVE_GTK = False
 except ImportError:
-    bumpopackdir = op_.join(op_.split(pwd)[0], 'src')
-    sys.path.insert(0, bumpopackdir)
-    import gameObjects
-    import gameutils
+    os.chdir(op_.join(op_.split(pwd)[0]))
+    sys.path.insert(0, os.getcwd())
+    __import__('src')
+    bumpo = sys.modules['bumpo'] = sys.modules['src']
+    import bumpo.plugins
+    from bumpo import gameObjects, baseObjects, gameUtils, const
+    try:
+        from bumpo.plugins import gtkGameObject
+        HAVE_GTK = True
+    except ImportError:
+        HAVE_GTK = False
 
-
-pygame.init()
-
-display_info = pygame.display.Info()
-MAX_X = display_info.current_w / 3
-MAX_Y = display_info.current_h / 3
 
 
 BASE_PATH = 'data'
-CONFIG_FILE_PATH = op_.join(BASE_PATH, 'config')
 FONTS_PATH = op_.join(BASE_PATH, 'fonts')
 IMAGES_PATH = op_.join(BASE_PATH, 'images')
-SOUNDS_PATH = op_.join(BASE_PATH, 'sounds')
 
 _DEF_FONT_NAME = 'FreeSans.otf'
 _DEF_FONT = op_.join(FONTS_PATH, _DEF_FONT_NAME)
 _DEF_FONT_SIZE = 20
 
+MAX_X = 100
+MAX_Y = 100
 
 def get_screen(x=None, y=None, iconify=True):
     screen = pygame.display.set_mode((MAX_X if x is None else x,
                              MAX_Y if y is None else y))
-    pygame.display.iconify() if iconify else True 
+    if iconify:
+        pygame.display.iconify()
     return screen
 
 
-class TestImages(unittest.TestCase):
-
-    def testDrawAndDelete(self):
-        _r = random.randint
-        screen = get_screen(MAX_X, MAX_Y)
-        scr_rect = screen.get_rect()
-        w, h = scr_rect.size
-        bg_color = (0,0,0,255)
-        background = pygame.Surface((w, h))
-        background.fill(bg_color)
-        original_background = background.copy()
-        # test draw
-        for i in range(500):
-            point = (_r(0, w-1), _r(0, h-1))
-            self.assertEqual(screen.get_at(point), background.get_at(point))
-        # test delete objects
-        positions = (['center', (0,0)], ['bottomleft', (1,-1)],
-                     ['topright', (-1,1)], ['midtop', (0,1)],
-                     ['midleft', (1,0)], ['midbottom', (0,-1)],
-                     ['midright', (-1,0)], ['center', (0,0)])
-        colors = list((_r(10, 255),_r(10, 255),_r(10, 255),255) for c in range(20))
-        surfaces = list(pygame.Surface((10, 10)) for s in range(20))
-        objects = list(gameObjects.GenericGameObject(s) for s in surfaces)
-        bounce_rect = screen.get_rect()
-        for obj, color in zip(objects, colors):
-            obj.surface.fill(color)
-            obj.move_random(bounce_rect)
-            obj.move_random(bounce_rect)
-            obj.move_random(bounce_rect)
-            obj.draw_on(screen)
-        for i in range(50):
-            for obj in objects:
-                for position, delta in positions:
-                    point = map(sum, zip(getattr(obj.rect, position), delta))
-                    self.assertTrue(obj.rect.collidepoint(point))
-                    self.assertNotEqual(screen.get_at(point),
-                                        original_background.get_at(point))
+def get_random_color ():
+    return tuple(random.randint(0,255) for _ in 'rgba')
 
 
-            
-class TestRects(unittest.TestCase):
+class TestConvert(unittest.TestCase):
 
-    def testUpdateRects(self):
-        screen = get_screen(MAX_X, MAX_Y)
-        scr_color = (0,0,0,255)
-        obj_color = (255,255,255,255)
-        surf_size = (2 * screen.get_size()[0] / 100,
-                     2 * screen.get_size()[0] / 100)
-        screen_rect = screen.get_rect()
-        objects = [gameObjects.GenericGameObject(pygame.Surface(surf_size))
-                    for i in range(10)]
-        for obj in objects:
-            obj.move_random(screen_rect)
-            screen.fill(obj_color, obj.rect)
-        for obj in objects:
-            screen.fill(scr_color, obj.rect)
-            self.assertTrue(screen.get_at(obj.rect.center) == scr_color)
+    def testConvert (self):
+        conv = gameUtils.convert
+        r = random.randint
+        for i in range(100):
+            s = pygame.Surface((r(1,1000), r(1,1000)))
+            for a in (True, False):
+                obj = pygame.Surface((10,10))
+                obj.fill(get_random_color())
+                res = [conv(s), conv(s,obj), conv(s,obj,a), conv(s,alpha=a)]
+                for c in res:
+                    self.assertIsInstance(c, pygame.Surface)
+                    self.assertEqual(s.get_size(), c.get_size())
 
-    def testCopyRect(self):
-        _r = random.randint
-        attrs = ['top', 'left', 'bottom', 'right', 'topleft',
-                 'bottomleft', 'topright', 'bottomright', 'midtop',
-                 'midleft', 'midbottom', 'midright', 'center', 'centerx',
-                 'centery', 'size', 'width', 'height', 'w', 'h']
-        for i in range(200):
-            w, h = _r(0, 1000), _r(0, 1000)
-            top, left = _r(0, 100), _r(0, 100)
-            orig_rect = pygame.Rect(top,left,w,h)
-            new_rect = gameutils.copy_rect(orig_rect)
-            for attr in attrs:
-                self.assertEqual(getattr(orig_rect, attr), getattr(new_rect, attr))
+    def testConvertShape (self):
+        r = random.randint
+        surfs = [pygame.Surface((r(1,1000),r(1,1000))) for _ in range(100)]
+        for s in surfs:
+            s.fill(get_random_color())
+        shapes = [baseObjects.Shape(s) for s in surfs]
+        for shape in shapes:
+            for alpha in (True, False):
+                cshape = shape.copy()
+                a = cshape.alpha
+                cshape.convert(alpha=alpha)
+                self.assertEqual(alpha, bool(cshape.alpha))
+        shapes = [baseObjects.Shape(s) for s in surfs]
+        # errors
+        tes = shapes[0]
+        gtko = gtkGameObject.GtkGameObject() if HAVE_GTK else 'EGGS'
+        invalid = (1, type('Spam', (), {}), baseObjects.GameObject(),
+                   gameObjects.GenericGameObject(), gtko)
+        for obj in invalid:
+            self.assertRaises(TypeError, tes.convert, obj)
+        # from shapes and surfaces
+        for shape in shapes:
+            shape2 = shape.copy()
+            shape2s = shape.copy()
+            shape3 = shape.copy()
+            shape4 = shape.copy()
+            surf = pygame.Surface((9,9))
+            surf.set_alpha(r(0,255))
+            obj = baseObjects.Shape(surf)
+            shape.convert(obj, alpha=False)
+            self.assertEqual(surf.get_alpha(), obj.alpha)
+            self.assertEqual(obj.alpha, shape.alpha)
+            a = shape2.alpha
+            shape2.convert(obj)
+            self.assertNotEqual(a, shape2.alpha)
+            a = shape2s.alpha
+            shape2s.convert(surf)
+            self.assertNotEqual(a, shape2s.alpha)
+            shape3.convert()
+            self.assertTrue(bool(shape3.alpha))
+            a = shape4.alpha
+            shape4.convert(alpha=False)
+            self.assertEqual(a,shape4.alpha)
 
-    def testAreas(self):
-        _r = random.randint
-        for i in range(200):
-            w, h = _r(0, 1000), _r(0, 1000)
-            self.assertEqual(gameutils.rect_area(pygame.Rect(0,0,w,h)), w * h)
-            w, h = _r(0, 1000), _r(0, 1000)
-            self.assertEqual(gameutils.surface_area(pygame.Surface((w,h))), w * h)
-
-    def testScale(self):
-        def frange(start, stop, step):
-            while start < stop:
-                yield start
-                start += step
-        for i in range(200):
-            size = tuple(random.randint(10, 1000) for dim in 'wh')
-            r = pygame.Rect((0,0), size)
-            area = gameutils.rect_area(r)
-            for factor in frange(-55, 55, 3.5):
-                scaled = gameutils.scale_rect(r, factor)
-                self.assertEqual(scaled.w, int(r.w*factor))
-                self.assertEqual(scaled.h, int(r.h*factor))
-        for n in range(2, 10):
-            w, h = tuple(random.randint(10, 1000) for dim in 'wh')
-            r = pygame.Rect(0,0, w, h)
-            new_r = gameutils.scale_rect_at_length(r, n, 'w')
-            self.assertEqual(n, new_r.w)
-            self.assertEqual(int(r.h*new_r.w/r.w), new_r.h)
-
-
-    def testRectResize(self):
-        _r = random.randint
-        positions = ('center', 'midtop', 'topleft', 'bottomright')
-        for i in range(200):
-            for pos in positions:
-                w, h = _r(10, 1000), _r(10, 1000)
-                top, left = _r(0, 1000), _r(0, 1000)
-                perc = _r(10, 90)
-                rect = pygame.Rect(left, top, w, h)
-                new_rect = gameutils.resize_rect_by_perc(rect, perc, pos)
-                self.assertTrue(rect.contains(new_rect), "%s,%s"%(rect,new_rect))
-                gameutils.resize_rect_by_perc_ip(rect, perc, pos)
-                self.assertEqual(rect, new_rect)
-
-    def testRectsAndObjectsCollide(self):
-        scr = get_screen(640, 480)
-        objects = list(gameObjects.GenericGameObject(pygame.Surface((10,20))) for i in range(9))
-        for pos, o in enumerate(objects):
-            o.set_surround_rect(perc=120)
-            for attr in ('rect', 'surround_rect'):
-                self.assertTrue(gameutils.gobj_collide_at(objects, pos, attr))
-        scr_rect = scr.get_rect()
-        rects = list(o.rect for o in objects)
-        rects, pos = gameutils.distribute_rects(rects, scr_rect, 20)
-        self.assertEqual(pos, len(objects))
-        for o, r in zip(objects, rects):
-            o.move_at(r.center, 'center')
-        for pos, o in enumerate(objects):
-            for attr in ('rect', 'surround_rect'):
-                self.assertFalse(gameutils.gobj_collide_at(objects, pos, attr))
-        for i in range(1,6):
-            rects = [pygame.Rect(0,0,2,3) for x in range(i)]
-            rects.append(pygame.Rect(5,5,5,5))
-            rects.extend([pygame.Rect(7,7, 6,6) for x in range(i)])
-            collisions = gameutils.rects_collide_at(rects, i)
-            self.assertEqual(len(collisions), i)
-            for c in collisions:
-                self.assertTrue(c > i)
-            rects = [pygame.Rect(5,5,2,3) for x in range(i)]
-            rects.append(pygame.Rect(4,2,5,5))
-            rects.extend([pygame.Rect(17,17, 6,6) for x in range(i)])
-            collisions = gameutils.rects_collide_at(rects, i)
-            self.assertEqual(len(collisions), i)
-            for c in collisions:
-                self.assertTrue(c < i)
-        rects = [pygame.Rect(x*4,x*4,2,3) for x in range(5)]
-        for i in range(len(rects)):
-            self.assertFalse(gameutils.rects_collide_at(rects, i))
-
-    def testDistributeRects(self):
-        _r = random.randint
-        screen = get_screen(800, 600)
-        scr_rect = screen.get_rect()
-        w, h = 30, 30
-        for i in range(200):
-            rects = list(pygame.Rect(0, 0, _r(1, w), _r(1, h)) for i in range(_r(2, 10)))
-            pad = i%10
-            rects, pos = gameutils.distribute_rects(rects, scr_rect, pad)
-            for n, r in enumerate(rects):
-                self.assertFalse(r.collidelistall(rects[:n]+rects[n+1:]))
-        #fail
-        scr_rect = pygame.Rect(10,10, 100,100)
-        for i in range(500):
-            rects = list(pygame.Rect(0, 0, _r(11, 51), _r(11, 51)) for i in range(_r(10, 20)))
-            pad = i%13
-            rects, pos = gameutils.distribute_rects(rects, scr_rect, pad)
-            self.assertNotEqual(pos, len(rects))
-
-    def testCmpRectsAndObjects(self):
-        _r = random.randint
-        rect_attrs = ('width', 'height', 'size')
-        rect_types = ('rect', 'surround_rect', 'urect')
-        for i in range(200):
-            le_ = (((_r(0, 10), _r(0, 10)), (_r(11, 20), _r(11, 20))) for l in range(100))
-            eq_ = (((e, e*2), (e, e*2)) for e in range(100))
-            gt_ = (((_r(30, 50), _r(30, 50)), (_r(1, 20), _r(1, 20))) for l in range(100))
-            for le, eq, gt in zip(le_, eq_, gt_):
-                for comp, retval in zip((le, eq, gt), [-1,0,1]):
-                    dim1, dim2 = comp
-                    topleft1 = (_r(0, 100), _r(0, 100))
-                    topleft2 = (_r(0, 100), _r(0, 100))
-                    rect1 = pygame.Rect(topleft1, dim1)
-                    rect2 = pygame.Rect(topleft2, dim2)
-                    obj1 = gameObjects.GenericGameObject(pygame.Surface(rect1.size))
-                    obj2 = gameObjects.GenericGameObject(pygame.Surface(rect2.size))
-                    # for xrect
-                    xobj1 = gameObjects.Cell(pygame.Surface(rect1.size))
-                    xobj2 = gameObjects.Cell(pygame.Surface(rect2.size))
-                    xobj1.add_item(gameObjects.GenericGameObject(pygame.Surface(rect1.size)),
-                                   {'topleft':'bottomleft'})
-                    xobj2.add_item(gameObjects.GenericGameObject(pygame.Surface(rect2.size)),
-                                   {'topleft':'bottomleft'})
-                    self.assertEqual(gameutils.cmp_rects_area(rect1, rect2), retval)
-                    for delta, rect_type in enumerate(rect_types):
-                        # rects
-                        self.assertEqual(gameutils.cmp_rects_attrs(
-                            rect1, rect2, rect_attrs, delta), retval)
-                        self.assertEqual(gameutils.cmp_rects_attrs(
-                            rect1, rect2, rect_attrs[:delta+1]), retval)
+    def testConvertObjects (self):
+        r = random.randint
+        clsobjs = [baseObjects.GameObject, gameObjects.GenericGameObject]
+        if HAVE_GTK:
+            clsobjs.append(gtkGameObject.GtkGameObject)
+        surfs = [pygame.Surface((r(1,1000),r(1,1000))) for _ in range(100)]
+        for c in clsobjs:
+            for surf in surfs:
+                objs = [surf, baseObjects.Shape(surf)]
+                objs.extend(c(surf) for c in clsobjs)
+            for o in objs:
+                obj = c(surf)
+                alpha = r(0,255)
+                if isinstance(o, pygame.Surface):
+                    o.set_alpha(alpha)
+                else:
+                    o.alpha = alpha
+                obj.convert(o, alpha=False)
+                if isinstance(o, pygame.Surface):
+                    self.assertEqual(o.get_alpha(), obj.alpha)
+                else:
+                    self.assertEqual(o.alpha, obj.alpha)
 
 
-class TestSurfacesAndColors(unittest.TestCase):
+class TestMisc (unittest.TestCase):
 
-    def testGetPortion(self):
-        screen = get_screen(600, 400)
-        screen.fill(pygame.Color('pink'))
-        for img in glob.glob(op_.join(IMAGES_PATH, '*.[pg][ni][gf]')):
-            self.assertTrue(
-                isinstance(gameutils.surface_from_file(img), pygame.Surface))
-        img_path = op_.join(IMAGES_PATH, 'elements', 'megafono.svg')
-        # test get_portion and draw_on / erase
-        img = gameObjects.Image(img_path)
-        portion_pink = gameutils.get_portion(screen, img.rect)
-        self.assertEqual(portion_pink.get_rect().size, img.rect.size)
-        img.draw_on(screen)
-        portion_x = gameutils.get_portion(screen, img.rect)
-        self.assertEqual(portion_x.get_rect().size, img.rect.size)
-        self.assertEqual(
-            pygame.surfarray.pixels2d(portion_pink).flatten().tolist(),
-            pygame.surfarray.pixels2d(portion_pink).flatten().tolist())
-        self.assertNotEqual(
-            pygame.surfarray.pixels2d(portion_pink).flatten().tolist(),
-            pygame.surfarray.pixels2d(portion_x).flatten().tolist())
-        img.erase(screen)
-        portion2 = gameutils.get_portion(screen, img.rect)
-        self.assertEqual(portion2.get_rect().size, img.rect.size)
-        for x in range(img.rect.w):
-            for y in range(img.rect.h):
-                self.assertEqual(portion_pink.get_at((x,y)), portion2.get_at((x,y)))
-        self.assertEqual(
-            pygame.surfarray.pixels2d(portion_pink).flatten().tolist(),
-            pygame.surfarray.pixels2d(portion2).flatten().tolist())
-        # other test, draw_on and gameutils.get_portion
-        img.draw_on(screen)
-        portion_x = gameutils.get_portion(screen, img.rect)
-        img.rect.topleft = screen.get_rect().center
-        screen.blit(portion_x, img.rect)
-        portion_y = gameutils.get_portion(screen, img.rect)
-        for x in range(img.rect.w):
-            for y in range(img.rect.h):
-                self.assertEqual(portion_x.get_at((x,y)), portion_y.get_at((x,y)))
+    def testDiv (self):
+        func = gameUtils.finddiv
+        for i in (-1, 0):
+            self.assertEqual(func(i), (1,1))
+        for i in xrange(1, int(1e6)):
+            self.assertGreaterEqual(operator.mul(*func(i)), i)
 
-    def test_resize (self):
-        def get_random_dims (max_length):
-            return tuple(random.randint(1, max_length) for fdim in 'wh')
-        orig_surfs = [pygame.Surface(get_random_dims(1000)) for _ in range(100)]
-        for surf in orig_surfs:
-            w, h = get_random_dims(1000)
-            new_surf = gameutils.surface_resize(surf, w, h)
-            self.assertEqual(new_surf.get_size(), (w, h))
+    def testTable (self):
+        r = random.randint
+        c = random.choice
+        Table = gameUtils.Table
+        E = Table(1,1).empty
+        args = []
+        for _ in range(50):
+            rows, cols = r(1, 100), r(1,100)
+            seq1 = [r(-100,100) for _ in range(0, rows*cols + r(10,40))]
+            seq2 = [r(-100,100) for _ in range(0, rows*cols - r(1, 10))]
+            args.append((rows,cols, c((None, E, "egg")), seq1))
+            args.append((rows,cols, c((None, E, "egg")), seq2))
+        for a in args:
+            rows, cols, empty, seq = a
+            table = Table(*a)
+            self.assertEquals(table, Table(*a))
+            self.assertEquals(table.size, (rows, cols))
+            self.assertNotEquals(table, Table(rows+1, cols, seq))
+            if seq:
+                self.assertNotEquals(table, Table(rows, cols, empty))
+            self.assertNotEquals(table, Table(rows, cols-1, empty, seq))
+            self.assertEquals(rows, table.n_rows)
+            self.assertEquals(cols, table.n_cols)
+            self.assertEquals(empty, table.empty)
+            self.assertEquals(len(table), rows*cols)
+            if len(seq) >= rows*cols:
+                self.assertTrue(table.isfull)
+                for p, (_, item) in enumerate(table.items()):
+                    self.assertEquals(seq[p], item)
+                self.assertFalse(table.empty in table)
+            else:
+                self.assertFalse(table.isfull)
+                self.assertTrue(table.empty in table)
+                for s, v in zip(seq, table.values()):
+                    self.assertEquals(s, v)
+                free = len(list(table.free()))
+                self.assertEquals(free, len(table) - len(seq), "%d %d" % (len(table),len(seq))  )
+                for i in seq:
+                    self.assertTrue(i in table)
+            iters = zip(table.iter_pos(), table.values(), table.items())
+            for pos, val, (ipos, ival) in iters:
+                self.assertEquals(pos, ipos)
+                self.assertEquals(val, ival)
 
-    def test_grayscale (self):
-        def t(surf):
-            return pygame.image.tostring(surf, 'RGBA')
-        def build_fill_surf (w, h, color):
-            surf = pygame.Surface(((w, h)))
-            surf.fill(color)
-            return surf
-        w, h = 300, 300
-        colors = ('green', 'red', 'blue', 'yellow')
-        surfaces = list(build_fill_surf(w, h, pygame.Color(c)) for c in colors)
-        for surf in surfaces:
-            for color in colors:
-                w_points = list(random.randint(0, w-1) for i in range(w/2))
-                h_points = list(random.randint(0, h-1) for i in range(h/2))
-                for x, y in zip(w_points, h_points):
-                    surf.set_at((x,y), pygame.Color(color))
-        images = list(gameObjects.GenericGameObject(s) for s in surfaces)
+    #TODO: test FakeSound
+
+class TestSurfaces (unittest.TestCase):
+
+    def testSurfaceFromFile (self):
+        func = gameUtils.surface_from_file
+        tostring = pygame.image.tostring
+        images = glob.glob(op_.join(IMAGES_PATH, '*'))
+        wrong_conv = it.cycle(['foobar', 'spam', 'eggs'])
         for img in images:
-            surf = img.surface.copy()
-            # grayscale
-            gray = gameutils.grayscale(img.surface)
-            self.assertNotEqual(t(img.surface), t(gray), "ERR0")
-            self.assertEqual(t(img.surface), t(img._original_surface), "ERR1")
-            for x, y in zip(w_points, h_points):
-                self.assertNotEqual(img.surface.get_at((x,y)), gray.get_at((x,y)), "ERR PIX1")
-            # grayscale_ip
-            gameutils.grayscale_ip(img.surface)
-            self.assertNotEqual(t(img.surface), t(img._original_surface), "ERR2")
-            self.assertEqual(t(img.surface), t(gray), "ERR3")
-            for x, y in zip(w_points, h_points):
-                self.assertEqual(img.surface.get_at((x,y)), gray.get_at((x,y)), "ERR PIX2")
+            for conv in (const.ALPHA_CONV, const.NORMAL_CONV):
+                try:
+                    surf = func(img)
+                    surf2 = func(img, conv)
+                except pygame.error as e:
+                    if str(e) == 'Unsupported image format':
+                        pass
+                    else: raise e
+                else:
+                    self.assertRaises(ValueError, func, img, next(wrong_conv))
+                    self.assertIsInstance(surf, pygame.Surface)
+                    self.assertIsInstance(surf2, pygame.Surface)
+                    if conv == const.ALPHA_CONV:
+                        self.assertEqual(tostring(surf, 'RGBA'),
+                                         tostring(surf2, 'RGBA'))
 
-    def test_average (self):
-        colors = {'green':0, 'red':0, 'blue':0, 'yellow':0, 'white':0, 'black':0}
-        for c in colors:
-            colors[c] = pygame.Color(c)
-        surfaces = [pygame.Surface((10,10)) for _ in colors]
-        for surface, color in zip(surfaces, colors):
-            surface.fill(colors[color])
-        for surface in surfaces:
-            ac = gameutils.average_color(surface)
-            self.assertTrue(isinstance(ac, pygame.Color))
-            self.assertEqual(ac, surface.get_at((0,0)))
+    def testSurfaceResize (self):
+        r = random.randint
+        resize = gameUtils.surface_resize
+        for _ in range(100):
+            surf = pygame.Surface((r(1,1000),r(1,1000)))
+            size = surf.get_size()
+            newsize = r(1,1000), r(1,1000)
+            newsurf = resize(surf, *newsize)
+            self.assertEqual(newsurf.get_size(), newsize)
+            ws = r(-100, -1)
+            for w,h in ([ws,ws], [ws,abs(ws)], [abs(ws),ws]):
+                self.assertRaises(ValueError, resize, surf, w, h)
 
-    def test_distance (self):
-        colors = {'green':0, 'red':0, 'blue':0, 'yellow':0, 'white':0, 'black':0}
-        for c in colors:
-            colors[c] = pygame.Color(c)
-        for c in colors.values():
-            self.assertEqual(int(gameutils.edistance(c, c)), 0)
-
-
-class TestSVG(unittest.TestCase):
-
-    def testFromSVG(self):
-        screen = get_screen(600, 400)
-        screen.fill(pygame.Color('pink'))
-        svg_images = glob.glob(op_.join(IMAGES_PATH, '*.svg'))
-        for img_path in svg_images:
-            img = gameObjects.Image(img_path)
-            size = img.rect.size
-            new_size = tuple(dim*11 for dim in size)
-            img.resize(*new_size)
-            self.assertEqual(new_size, img.rect.size)
-            self.assertEqual(new_size, img.surface.get_rect().size)
-            self.assertTrue(img.from_svg)
-
-    def testIsSVG(self):
-        svg_images = glob.glob(op_.join(IMAGES_PATH, '*.svg'))
-        for img in svg_images:
-            self.assertTrue(gameutils.is_svg(img))
-        other_images = set(svg_images).symmetric_difference(
-            glob.glob(op_.join(IMAGES_PATH, '*')))
-        for img in filter(op_.isfile, other_images):
-            self.assertFalse(gameutils.is_svg(img))
-
-    def testSurfaceFromSVG(self):
-        svg_images = glob.glob(op_.join(IMAGES_PATH, '*.svg'))
-        for img in svg_images:
-            surface = gameutils.surface_from_svg(img)
-            self.assertTrue(isinstance(surface, pygame.Surface))
-
-    def testImgBuffer(self):
-        for i in range(10):
-            s = list(string.letters)
-            n = list(map(str, range(100)))
-            buf = gameutils.ImgBuffer()
-            data = []
-            for r in range(random.randint(4, 21)):
-                random.shuffle(s)
-                random.shuffle(n)
-                data.extend(s)
-                data.extend(n)
-                buf(''.join(s))
-                buf(''.join(n))
-            self.assertEqual(''.join(data), buf.get_data())
+    def testScale (self):
+        r = random.randint
+        sizes = [(r(1, 1000), r(1,1000)) for _ in range(100)]
+        for w,h in sizes:
+            # scale_perc
+            perc = r(1,500)
+            pw, ph = w*perc/100, h*perc/100
+            self.assertEqual(gameUtils.scale_perc(w,h,perc), (pw,ph))
+            # scale_perc_from
+            fs = gameUtils.scale_perc_from(w,h,perc,const.WIDTH)
+            self.assertEqual(fs, (pw, h*pw/w))
+            fs = gameUtils.scale_perc_from(w,h,perc,const.HEIGHT)
+            self.assertEqual(fs, (ph*w/h, ph))
+            # scale_from_dim
+            length = r(1,500)
+            ds = gameUtils.scale_from_dim(w,h, length, const.WIDTH)
+            self.assertEqual(ds, (length, length*h/w))
+            ds = gameUtils.scale_from_dim(w,h, length, const.HEIGHT)
+            self.assertEqual(ds, (length*w/h, length))
+            # test errors
+            for func in (gameUtils.scale_perc_from, gameUtils.scale_from_dim):
+                for dim in 'foo spam eggs'.split():
+                    self.assertRaises(ValueError, func, w,h,perc, dim)
+            args = [list(r(-10, 10) for _ in 'whp') for _ in range(100)]
+            for a in args:
+                if all(v >= 0 for v in a):
+                    i = a.index(max(a))
+                    a[i] = -(a[i]+1)
+                self.assertRaises(ValueError, gameUtils.scale_perc, *a)
 
 
-class TestMisc(unittest.TestCase):
+class TestPlugin (unittest.TestCase):
 
-    def testFindDiv(self):
-        for i in range(200):
-            self.assertTrue(operator.mul(*gameutils.finddiv(i)) >= i)
+    @classmethod
+    def setUpClass (cls):
+        cls.runtime_fake_module_format_fail_import = '''
+import %s # fake module name
+'''
+        cls.runtime_fake_module_format_fail_plugin = '''
+MODULE_PLUGINS = ["foo", "bar", "Baz"]
+EX_ERR = ['ZeroDivisionError', 'IndexError', 'AttributeError']
+def foo (*a, **k):
+  1/0
+def bar (*a, **k):
+  raise IndexError("raised from a fake plugin object.")
+class Baz:
+  def __init__ (self):
+    print self.spam
+'''
 
-    def testGetAttrs(self):
-        rect_attrs_ok = [('topleft', 'x', 'y', 'w', 'bottomright', 'width'),
-                         ('height', 'midtop', 'center', 'centerx'),]
-        rect_attrs_ko = ('bar', 'foo', 'baz', 'spam')
-        surf_attrs_ok = [('get_flags', 'get_height', 'get_rect', 'subsurface'),
-                         ('get_clip', 'get_colorkey', 'get_flags', 'set_alpha'),]
-        surf_attrs_ko = rect_attrs_ko[:]
-        rect = pygame.Rect(2,3,5,7)
-        surf = pygame.Surface((11,13))
-        # rect
-        for attrs in rect_attrs_ok:
-            ret_dict = gameutils.get_attrs_from(attrs, rect)
-            self.assertEqual(set(attrs), set(ret_dict)) 
-            for ret_attr, ret_value in ret_dict.items():
-                self.assertEqual(ret_value, getattr(rect, ret_attr))
-            err_attr = list(attrs[:]) + ['xx', 'yy']
-            ret_dict = gameutils.get_attrs_from(attrs, rect, False)
-            self.assertEqual(set(attrs), set(ret_dict))
-        for attrs in rect_attrs_ko:
-            self.assertRaises(AttributeError, gameutils.get_attrs_from, attrs, rect)
-            self.assertFalse(gameutils.get_attrs_from(attrs, rect, False))
-        # surface
-        for attrs in surf_attrs_ok:
-            surf_dict = gameutils.get_attrs_from(attrs, surf)
-            self.assertEqual(set(attrs), set(surf_dict))
-            for surf_attr, surf_value in surf_dict.items():
-                self.assertEqual(surf_value, getattr(surf, surf_attr))
-            err_attr = list(attrs[:]) + ['xx', 'yy']
-            surf_dict = gameutils.get_attrs_from(attrs, surf, False)
-            self.assertEqual(set(attrs), set(surf_dict))
-        for attrs in surf_attrs_ko:
-            self.assertRaises(AttributeError, gameutils.get_attrs_from, attrs, surf)
-            self.assertFalse(gameutils.get_attrs_from(attrs, surf, False))
+    def setUp (self):
+        self.bk_dir = tempfile.mkdtemp()
+        with open(op_.join(self.bk_dir, '__init__.py'), 'w'):
+            pass
+
+    def tearDown (self):
+        shutil.rmtree(self.bk_dir)
+
+    def testFindModules (self):
+        expect = ('gtkGameObject',)
+        res = bumpo.plugins.find_plugin_modules()
+        self.assertEqual(res, expect)
+        files = []
+        for _ in range(10):
+            f = tempfile.NamedTemporaryFile(suffix='.py', dir=self.bk_dir,  delete=False)
+            files.append(op_.splitext(op_.basename(f.name))[0])
+            f.close()
+        res = sorted(bumpo.plugins.find_plugin_modules(self.bk_dir))
+        self.assertEqual(sorted(files), res)
+
+    def testLoadPlugin (self):
+        modules = bumpo.plugins.find_plugin_modules()
+        paths = bumpo.plugins.__path__
+        for modname in modules:
+            module = bumpo.plugins.get_module(modname, paths)
+            for plugname in module.MODULE_PLUGINS:
+                plugin = bumpo.plugins.load_plugin(plugname, modname, paths)
+                # nothing to do here, should run as expected.
+        # fail on module load
+        fakemodulenames = [string.ascii_letters, 'foobarbaz', 'spam_module']
+        f = tempfile.NamedTemporaryFile(suffix='.py', dir=self.bk_dir,  delete=False)
+        f.write(self.runtime_fake_module_format_fail_import % choice(fakemodulenames))
+        f.close()
+        plugname = op_.splitext(op_.basename(f.name))[0]
+        module = bumpo.plugins.find_plugin_modules(self.bk_dir)[0]
+        self.assertRaises(bumpo.plugins.LoadPluginError,
+                          bumpo.plugins.load_plugin,
+                          plugname, module, [self.bk_dir])
+        self.tearDown()
+        self.setUp()
+        # fail on plugin use
+        f = tempfile.NamedTemporaryFile(suffix='.py', dir=self.bk_dir,  delete=False)
+        f.write(self.runtime_fake_module_format_fail_plugin)
+        f.close()
+        plugname = op_.splitext(op_.basename(f.name))[0]
+        modname = bumpo.plugins.find_plugin_modules(self.bk_dir)[0]
+        module = bumpo.plugins.get_module(modname, [self.bk_dir])
+        for plugname, err in zip(module.MODULE_PLUGINS, module.EX_ERR):
+            plugin = bumpo.plugins.load_plugin(plugname, modname, [self.bk_dir])
+            self.assertRaises(getattr(exceptions, err), plugin)
 
 
-
-
-def load_tests():
+def load_tests(args=None):
     loader = unittest.TestLoader()
-    test_cases = (TestImages, TestRects, TestSurfacesAndColors, TestSVG, TestMisc)
+    if not args:
+        test_cases = (TestConvert, TestMisc, TestSurfaces, TestPlugin)
+    else:
+        g = globals()
+        test_cases = (g[t] for t in args)
     return (loader.loadTestsFromTestCase(t) for t in test_cases)
 
 
 
 if __name__ == '__main__':
     os.chdir(pwd)
-    unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(load_tests()))
+    pygame.init()
+    get_screen()
+    unittest.TextTestRunner(verbosity=2).run(
+        unittest.TestSuite(load_tests(sys.argv[1:])))
+    pygame.quit()

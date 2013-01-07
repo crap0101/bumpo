@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # This file is part of bumpo and is released under a MIT-like license
@@ -11,961 +10,535 @@ various type of game objects.
 
 """
 
-import gameutils
-from gameutils import Table
 
+# std imports
+from collections import OrderedDict
+import itertools as it
+# local imports
+from baseObjects import GameObject, Shape, Board
+import gameUtils
+from gameUtils import Table
+from const import WIDTH, HEIGHT, CENTER
+# external imports
 import pygame
-import random
-import collections
-# for python < 2.7, create an alias for OrderedDict, a fake object
-# which only have the 'item' method used by the Cell class.
-if not hasattr(collections, 'OrderedDict'):
-    class FakeOD(object):
-        def __init__(self, attrs=None):
-            if not attrs:
-                self._items = {}
-            else:
-                try:
-                    self._items = tuple((k, v) for k, v in attrs.items())
-                except AttributeError:
-                    self._items = tuple((k, v) for k, v in attrs)
-        def items(self):
-            return self._items
-    collections.OrderedDict = FakeOD
 
 
-
-class GenericGameObject (object):
+class GenericGameObject (GameObject):
+    _reload_on_resize = True
     """
     A generic game object. Provide methods for drawing,
     moving, resizing, comparing game objects, etc.
     """
-    def __init__ (self, surface=None, cmp_value=None):
+    def __init__ (self, obj=None, cmp_value=None, reload=None):
         """
-        Set *surface* as its own surface or create a new zero-sized surface;
-        also set the *rect* attribute as the surface's rect.
-        *cmp_value* is the value used to compare GenericGameObjects,
-        e.g. obj1 == obj2 (if not provided fall to id(self)).
+        TODO: doc
+        create a new game object for a BaseShape, pygame.Surface, file
+        if reload == None use the class-level attribute.
         """
-        self._from_svg = False
-        self._filepath = None
-        self._reload_image_on_resize = True #False
-        self._drawed_surface = None # for *draw_on* and *erase* methods
-        self.surface = surface if surface else pygame.Surface((0,0))
-        self.rect = self.surface.get_rect()
-        self._original_surface = self.surface.copy()
-        self._surround_rect = gameutils.copy_rect(self.rect)
-        self._surround_rect_delta = None
-        self._surround_rect_perc = None
-        self._cmp_value = cmp_value if cmp_value is not None else id(self)
-        self.actions = collections.defaultdict(list)
-        self.velocity = [5, 7]
-        self.start_attr = 'center'
-        self.start_position = self.rect.center
+        if isinstance(obj, basestring):
+            self._filepath = obj
+            obj = gameUtils.surface_from_file(obj)
+        else:
+            self._filepath = None
+        super(GenericGameObject, self).__init__(obj, cmp_value)
+        self.convert()
+        self._orig_shape = self.shape
+        if reload is not None:
+            self._reload_on_resize = bool(reload)
 
     @property
-    def from_svg (self):
-        """True if the object has been created from a svg image."""
-        return self._from_svg
+    def reload (self): 
+        """
+        Returns the boolean value used by other methods (resize, fit, etc.)
+        for decide if reload the object's source image before doing their job.
+        """
+        return self._reload_on_resize
+    @reload.setter
+    def reload (self, value):
+        """
+        If set to a true value, resizing, fitting or any other operation
+        which cause changing the object's dimensions will be performed
+        possibly reloading the original shape image (Shape, GameObject
+        or whatever) if information loss can happen.
+        """
+        if value and self._filepath:
+            size = self.size
+            m = max(size)
+            self._shape = self._shape.__class__(
+                gameUtils.surface_from_file(self._filepath))
+            self.convert()
+            self.resize(*size)
+        self._reload_on_resize = bool(value)
 
-    @property
-    def filepath (self):
+    def fit (self, obj):
         """
-        Return (if any) the path of the file form which the object
-        has been created or None. It's a read-only attribute.
+        Move and resize this object to fit obj, which can be either a Shape
+        or a GameObject. The aspect ratio of the object is preserved, so the
+        new size may be smaller than the target in either width or height.
         """
-        return self._filepath
-
-    @property
-    def reload_image_on_resize (self):
-        """
-        Return the boolean value used by other methods (resize, fit, etc.)
-        used to decide if reload the object's source image before
-        doing their job.
-        Default: False.
-        """
-        return self._reload_image_on_resize
-    @reload_image_on_resize.setter
-    def reload_image_on_resize (self, value):
-        """
-        If set to a true *value*, resizing, fitting or any other operation
-        which cause changing the surface's dimensions will be performed
-        reloading the original image form its file (is the object's *filepath*
-        attribute). If the object's surface were build form an existing surface
-        (i.e. the *filepath* attribute is set to None) this attribute will be
-        ignored by the above-mentioned methods.
-        """
-        self._reload_image_on_resize = bool(value)
-
-    @property
-    def area (self):
-        """The object's rect area"""
-        return self.rect.width * self.rect.height
-
-    @property
-    def size (self):
-        """The object's rect size."""
-        return self.rect.size
-    @size.setter
-    def size (self, size):
-        """Resize the object at the given *size* (width, height)."""
-        self.resize(*size)
-
-    @property
-    def original_surface (self):
-        """
-        Returns a _copy_ of the object's original surface, i.e. the surface
-        which has been set at time of object creation or by the last call
-        of the *set_surface* method.
-        """
-        return self._original_surface.copy()
-
-    @property
-    def compare_value (self):
-        """The value used to compare this object."""
-        return self._cmp_value
-    @compare_value.setter
-    def compare_value (self, cmp_value):
-        """Set the value used to compare this object."""
-        self._cmp_value = cmp_value
-
-    def __eq__(self, other):
-        return self._cmp_value == other
-
-    def __ne__ (self, other):
-        return self._cmp_value != other
-
-    def clamp (self, rect):
-        """
-        Move the object's rect to be completely inside
-        the *rect*. Return the new object's rect.
-        """
-        self.rect = self.rect.clamp(rect)
-        return self.rect
-
-    def draw_on (self, surface, background=None):
-        """
-        Draw the object on *surface*. If *background* is not None,
-        it must be a surface intended to be drawed on *surface* _before_
-        the object's surface (and at the same position).
-        The portion of *surface* drawed will be saved for and repainted by
-        the *erase* method if no other surface inteded to be drawed are
-        passed to the latter method. Note that the portion of the original
-        surface is saved _before_ blitting *background*.
-        """
-        self._drawed_surface = gameutils.get_portion(surface, self.rect)
-        if background:
-            surface.blit(background, self.rect, self.rect)
-        return surface.blit(self.surface, self.rect)
-
-    def erase (self, destination, surface=None, clip_area=None):
-        """
-        Erase the object's surface from *destination*, drawing *surface*
-        in its rect's area. If no *surface* is passed, or not a True value,
-        the surface generated from a previously call to the *draw_on* method
-        is used instead, otherwise raise a TypeError. *clip_area* represents
-        a smaller portion of the destination surface to draw (generally should
-        be the object's rect).
-        """
-        surface = surface or self._drawed_surface
-        if not surface:
-            raise TypeError("Need a Surface to draw!")
-        return destination.blit(surface, self.rect, clip_area)
-
-    def fit (self, rect_or_surface):
-        """
-        Move and resize the object's rect to fit *rect_or_surface*.
-        The aspect ratio of the original Rect is preserved, so the new
-        rectangle may be smaller than the target in either width or height.
-        """
-        try:
-            self.resize(*self.rect.fit(rect_or_surface.get_rect()).size)
-        except AttributeError:
-            self.resize(*self.rect.fit(rect_or_surface).size)
-
-    def is_clicked (self, point=None):
-        """
-        Return True if  *point* is inside the object's rect.
-        A point along the right or bottom edge is not considered to be
-        inside the rectangle. If *point* is not provided use the point value
-        got from pygame.mouse.get_pos().
-        """
-        return self.rect.collidepoint(point or pygame.mouse.get_pos())
-
-    def goto_start(self):
-        """
-        Set the object's rect center at the value of its
-        *start_position* attribute.
-        """
-        setattr(self.rect, self.start_attr, self.start_position)
-
-    def update_start_position (self, rect_attr='center'):
-        """
-        Set the object's *start_position* attribute to the
-        object's rect attribute *rect_attr* (default to 'center').
-        """
-        self.start_attr = rect_attr
-        self.start_position = getattr(self.rect, rect_attr)
-
-    def move (self, x, y):
-        """
-        Move the object's rect by the given offset. *x* and *y* can be
-        any integer value, positive or negative. Returns the moved rect.
-        """
-        self.rect = self.rect.move(x, y)
-        return self.rect
-
-    def move_at (self, position, anchor_at='center'):
-        """
-        Move the object's rect at *position*.
-        *anchor_at* (default 'center') must be a string representing
-        a valid rect attribute and is used to determine the new position.
-        """
-        setattr(self.rect, anchor_at, position)
-        return self.rect
-
-    def move_bouncing (self, bounce_rect, velocity=(None, None)):
-        """
-        Move the object's rect bouncing inside *bounce_rect*
-        by *velocity* (a pair, default to self.velocity).
-        """
-        x, y = velocity if (None not in velocity) else self.velocity
-        new_velocity = [x, y]
-        if (self.rect.left + x <= bounce_rect.left or
-            self.rect.right + x >= bounce_rect.right):
-            new_velocity[0] = -x
-        if (self.rect.bottom + y >= bounce_rect.bottom or
-            self.rect.top + y <= bounce_rect.top):
-            new_velocity[1] = -y
-        self.move(x, y)
-        self.clamp(bounce_rect)
-        self.velocity = new_velocity
-        return self.rect
-
-    def move_random (self, in_rect, x=(None,None), y=(None,None)):
-        """
-        Move the object's rect inside *in_rect* by a random value.
-        The optional args *x* and *y* must be a pair of integer
-        (positive or negative) and are used as a range in which choose
-        the random value for moving each coordinate e.g. x=(min, max).
-        If a pair element is None it's value belong to the *in_rec*
-        dimension (for max) or zero (for min). This pairs are silently sorted,
-        so x=(8, 19) or x=(19, 8) are the same. Raise TypeError for invalid
-        value of *x* and *y* or if *in_rect* is not a valid object.
-        Return the moved rect.
-        """
-        try:
-            min_x, max_x = sorted(x)
-            min_y, max_y = sorted(y)
-            w, h = in_rect.size
-            max_x = w if max_x is None else max_x
-            max_y = h if max_y is None else max_y
-            self.move(random.randint(min_x or 0, max_x),
-                         random.randint(min_y or 0, max_y))
-        except (TypeError, ValueError), err:
-            raise TypeError("%s: 'x' and 'y' args must be tuples of two "
-                             "integer items (or None, eg: (None, 100))" % err)
-        except AttributeError, err:
-            raise TypeError(str(err))
-        self.clamp(in_rect)
-        return self.rect
-
-    def resize (self, width, height):
-        """
-        Resize the object at the new (width, height) dimension.
-        *width* and *height* must be two positive integer,
-        otherwise TypeError will be raised.
-        """
-        if self.reload_image_on_resize:
-            if self.filepath:
-                if self.from_svg:
-                    surface = gameutils.surface_from_svg(self.filepath, width, height)
+        if self._reload_on_resize:
+            if obj.w > self.w or obj.h > self.h:
+                if self._filepath:
+                    self._shape = self._shape.__class__(
+                        gameUtils.surface_from_file(self._filepath))
+                    self.convert()
                 else:
-                    surface = gameutils.surface_from_file(self.filepath)
-                self.set_surface(surface)
-        self.surface = gameutils.surface_resize(self.surface, width, height)
-        self.rect.size = self.surface.get_rect().size
+                    self._shape = self._orig_shape.copy()
+        super(GenericGameObject, self).fit(obj)
 
-    def resize_from_dim (self, length, dim):
+    def resize (self, width, height, anchor=CENTER):
         """
-        Scale the object in relation to *length*, relative to the
-        dimension *dim* (width or height). *dim* must be a string ('w' or 'h')
-        representing the first dimention upon which the resize is
-        performed. The other dimension will be scaled accordingly.
-        """
-        rect = gameutils.scale_rect_at_length(self.rect, length, dim)
-        self.resize(*rect.size)
-        
-    def resize_from_rect (self, rect):
-        """Resize at the size of *rect*."""
-        self.resize(*rect.size)
+        Resize this object at (width, height) size.
+        anchor (default CENTER) is the object's invariant point
+        to be preserved after resizing.
+        """ 
+        fp = getattr(self, anchor)
+        if self._reload_on_resize:
+            if width > self.w or height > self.h:
+                if self._filepath:
+                    self._shape = self._shape.__class__(
+                        gameUtils.surface_from_file(self._filepath))
+                    self.convert()
+                else:
+                    self._shape = self._orig_shape.copy()
+        super(GenericGameObject, self).resize(width, height)
+        self.move_at(fp, anchor)
 
-    def resize_by_perc (self, perc):
-        """Resize the object by *perc*, e.g with perc=50 resize 50%."""
-        rect = gameutils.resize_rect_by_perc(self.rect, perc)
-        self.resize(*rect.size)
+    def resize_perc_from (self, obj, perc, anchor=CENTER):
+        """Resize this object at obj's perc size."""
+        w, h = gameUtils.scale_perc(obj.w, obj.h, perc)
+        self.resize(w, h, anchor)
 
-    def resize_perc_from (self, surface_or_rect, perc, dim='h'):
-        """
-        Resize the object scaling in relation to the dimension *dim*
-        (width or height) of *surface_or_rect* resized by *perc*.
-        Optional *dim* must be a string ('w' or 'h'), default to 'h'.
-        """
-        try:
-            rect = surface_or_rect.get_rect()
-        except AttributeError:
-            rect = surface_or_rect
-        perc_rect = gameutils.resize_rect_by_perc(rect, perc)
-        length = getattr(perc_rect, dim)
-        scaled_rect = gameutils.scale_rect_at_length(self.rect, length, dim)
-        self.resize(*scaled_rect.size)
+    def scale_perc (self, perc, anchor=CENTER):
+        """Scale this object by perc, e.g with perc=50, scale at 50%."""
+        w, h = gameUtils.scale_perc(self.w, self.h, perc)
+        self.resize(w, h, anchor)
 
-    def rotate (self, angle, anchor_at='center'):
+    def scale_perc_from (self, obj, perc, dim=HEIGHT, anchor=CENTER):
+        """Scale this object at the perc length of obj's
+        dimension dim (default HEIGHT).
+        """
+        w, h = gameUtils.scale_perc_from(obj.w, obj.h, perc, dim)
+        length = w if dim == WIDTH else h
+        w, h = gameUtils.scale_from_dim(self.w, self.h, length, dim)
+        self.resize(w, h, anchor)
+
+    def scale_from_dim (self, length, dim=HEIGHT, anchor=CENTER):
+        """Scale the object by the dim-relative length."""
+        w, h = gameUtils.scale_from_dim(self.w, self.h, length, dim)
+        self.resize(w, h, anchor)
+
+    #XXX+TODO
+    def _rotate (self, angle, anchor_at='center'):
         """
         Rotate the object's surface by *angle* amount. Could be a float value.
         Negative angle amounts will rotate clockwise. *anchor_at* is the rect
         attribute used for anchor the rotated rect (default to 'center').
-        Use the attr *original_surface* for rotation to avoid the surface
-        enlargement and (when many calls to rotate occurs) the consequently
-        segfault or raising of pygame error.
-        Any blit performed on the object surface will be lost (to avoid
-        this use the method set_surface() without args).
         """
-        self.surface = self.original_surface
-        anchor_point = getattr(self.rect, anchor_at)
-        self.surface = pygame.transform.rotate(self.surface, angle)
-        #self.surface = pygame.transform.rotozoom(self.surface, angle, 1)
-        self.rect = self.surface.get_rect()
-        setattr(self.rect, anchor_at, anchor_point)
-
-    def raise_actions (self, group='default'):
-        """
-        Execute the action(s) previously set.
-        Optional *group* is a string, the name of the group which
-        the action(s) to execute belongs (default to 'default' group).
-        """
-        for action in self.actions[group]:
-            callable_, args, kwords = action
-            callable_(*args, **kwords)
-
-    def set_action (self, callable_, args=None, kwords=None, group='default'):
-        """
-        Set a new action.
-        *callable_* is a callable object which will be executed by the
-        raise_actions() method, the optional *args* must be a collection
-        or args to pass to 'callable_' and the optional argument *kwords*
-        a dict representing the callable's keywords arguments.
-        *group* is the group which this action belongs to, if not provided
-        this action fall in the 'default' group.
-        """
-        self.actions[group].append((callable_, args or [], kwords or {}))
-
-    def del_action_group (self, group):
-        """
-        Delete the action(s) of the group *group* and return it.
-        Return None if *group* is not present.
-        """
-        return self.actions.pop(group, None)
-
-    def set_rect_attrs (self, dict_or_seq):
-        """
-        Set the object's rect attributes from *dict_or_seq*.
-        *dict_or_seq* can be either a  mapping object (in this case it
-        must provide an items() method) or any iterable of (key, value) pairs.
-        """
-        try:
-            items = dict_or_seq.items()
-        except AttributeError:
-            items = dict_or_seq
-        for attr, value in items:
-            setattr(self.rect, attr, value)
-
-    def set_surface (self, surface=None):
-        """
-        Set the object's surface with *surface*. If *surface* is not provided,
-        use the actual surface (can be useful, for example, after a blit on
-        the object surface to register these changes, updating the
-        *original_surface* attribute.
-        """
-        if surface:
-            self.surface = surface.copy()
-            self.rect.size = self.surface.get_rect().size
-        self._original_surface = self.surface.copy()
-
-    @property
-    def surround_rect (self):
-        """
-        surround_rect is a rect which can help in some situations,
-        e.g. distributing many non-overlapping objects on a surface or
-        placing the object with a certain amount of space from other objects.
-        It's centered at the object's rect center and follows its movements
-        and resizements. By default coincide with the object's rect.
-        """
-        if self._surround_rect_delta is not None:
-            rect = gameutils.copy_rect(self.rect)
-            rect.w += self._surround_rect_delta
-            rect.h += self._surround_rect_delta
-            rect.center = self.rect.center
-            return rect
-        elif self._surround_rect_perc is not None:
-            return gameutils.resize_rect_by_perc(
-                gameutils.copy_rect(self.rect), self._surround_rect_perc)
-        else:
-            self._surround_rect.center = self.rect.center
-            return self._surround_rect
-    @surround_rect.setter
-    def surround_rect (self, rect):
-        if not isinstance(rect, pygame.Rect):
-            raise typeError("surround_rect must be a Rect object")
-        self._surround_rect_delta = None
-        self._surround_rect_perc = None
-        self._surround_rect = gameutils.copy_rect(rect)
-
-    def set_surround_rect (self, length=None, perc=None, rect=None):
-        """
-        Set the surround_rect of the object's rect.
-        This is a dummy method which set some attribute used to update
-        the surround_rect when the object's rect changes.
-        All arguments are optional, but only one at a time must be present,
-        raise TypeError otherwise.
-        *length* must be an integer, the surround_rect will be created
-        adding this value to the object's rect dimensions.
-        *rect* must be a valid rect object, the new surround_rect.
-        *perc* create a surround_rect scaling by this value the object's rect.
-        """
-        nargs = sum(1 for x in (length, perc, rect) if x is not None)
-        if nargs == 0:
-            return
-        elif nargs > 1:
-           raise TypeError("set_surround_rect takes only two arguments"
-                           " (self, [length | perc | rect])")
-        if rect:
-            self.surround_rect = rect
-        elif length is not None:
-            self._surround_rect_delta = length
-            self._surround_rect_perc = None
-        elif perc is not None:
-            self._surround_rect_perc = perc
-            self._surround_rect_delta = None
-
-
-# IMAGE CLASSES
-
-class Image (GenericGameObject):
-    def __init__ (self, image_path, cmp_value=None):
-        """
-        Create a game object using the image file *image_path* as its surface.
-        As an alternative *image_path* can be a pygame.Surface object, which
-        is copied and become the object's surface.
-        DANGER: using Scalable Vector Graphics (*.svg) format as *image_path*
-        any resizing operation cause reloading the content from the
-        original file; so any change to the object's surface (blit,
-        subsurface, Cell's items were lost. Do resizing, fitting and
-        similar operations *before* any surface modification or create
-        another game object from the object's surface. To know if an object
-        were build from a svg, check the *from_svg* attribute.
-        """
-        _from_svg = False
-        if isinstance(image_path, pygame.Surface):
-            surface = image_path.copy()
-            image_path = None
-        elif gameutils.is_svg(image_path):
-            surface = gameutils.surface_from_svg(image_path)
-            _from_svg = True
-        else:
-            surface = gameutils.surface_from_file(image_path)
-        super(Image, self).__init__(surface, cmp_value)
-        self._from_svg = _from_svg
-        self._filepath = image_path
+        raise NotImplementedError
 
 
 class TextImage (GenericGameObject):
-    """Create game object for display text."""
-    def __init__ (self, text, font_name, font_size,
-                  text_color, bg_color=None, cmp_value=None):
+    """Create a game object for display text."""
+    def __init__ (self, obj, fname, fsize, fgc, bgc=None, cmp_value=None):
         """
-        Create a TextImage object: *text* is the string to be displayed;
-        *font_name* can be either a filename or a font name, in the latter
+        Create a TextImage object: *obj* can be the string to be displayed
+        or another TextImage object or anything with a text attribute which
+        will be used as the text to display.
+        *fname* can be either a filename or a font name, in the latter
         case the font must be present in the system, otherwise a random
-        available font is used instead; *font_size* is the initial size of
-        the font, may change when the object size change.
-        *text_color* is the color used for blit the text, *bg_color* is the
-        background color (default to None, means transparent).
+        available font is used instead;
+        *fsize* is the initial size of the font.
+        *fgc* is the foreground color, used for blit the text.
+        *bgc* is the background color (default to None, i.e. transparent).
         """
-        self.font_name = font_name
-        self.font_size = font_size
-        self.text = text
-        self.bg_color = bg_color
-        self.text_color = text_color
-        self.font = None
-        self._build_font(font_name, font_size)
+        if isinstance(obj, basestring):
+            self._text = obj
+        else:
+            self._text = obj.text
+        self._fname = fname
+        self._fsize = fsize
+        self._bgc = bgc
+        self._fgc = fgc
+        self._font = None  # the font returned by _build_font
+        self._build_font(fname, fsize)
         super(TextImage, self).__init__(self._build_surface(), cmp_value)
 
     def _build_surface (self):
-        """Build the object's surface."""
-        # XXX: pygame BUG
+        """Builds and returns the object's surface."""
+        # NOTE: pygame BUG
         # Cfr. http://pygame.motherhamster.org/bugzilla/show_bug.cgi?id=49
         # fixed: http://hg.pygame.org/pygame/changeset/6cc8196e0181
-        if self.bg_color is None:
-            return self.font.render(self.text, True, self.text_color)
-        return self.font.render(self.text, True, self.text_color, self.bg_color)
+        if self._bgc is None:
+            return self._font.render(self.text, True, self._fgc)
+        return self._font.render(self.text, True, self._fgc, self._bgc)
         
     def _build_font (self, name, size):
-        """
-        Build the font. Private method used in resizing and object
-        instantiation; see the docstring of the __init__ method.
-        """
-        self.font_name = name
-        self.font_size = size
+        """Build the font."""
+        self._fname = name
+        self._fsize = size
         try:
-            self.font = pygame.font.Font(self.font_name, self.font_size)
+            self._font = pygame.font.Font(self._fname, self._fsize)
         except IOError:
-            self.font = pygame.font.SysFont(self.font_name, self.font_size)
+            self._font = pygame.font.SysFont(self._fname, self._fsize)
         except RuntimeError:
-            self.font = pygame.font.SysFont(
-                ','.join(pygame.font.get_fonts()), self.font_size)
+            self._font = pygame.font.SysFont(
+                ','.join(pygame.font.get_fonts()), self._fsize)
 
-    def resize (self, w, h):
+    @property
+    def bg (self):
+        """Returns the background color."""
+        return self._bgc
+    @property
+    def fg (self):
+        """Returns the foreground color."""
+        return self._fgc
+    @property
+    def fname (self):
+        """Returns the font name."""
+        return self._fname
+    @property
+    def fsize (self):
+        """Returns the font size."""
+        return self._fsize
+    @property
+    def text (self):
+        """Returns the object's text as a string."""
+        return self._text
+
+    def resize (self, w, h, anchor=CENTER):
         """
         Resize the object at the given width and height,
         rebuilding the font and the object's surface.
-        """
-        fw, fh = self.font.size(self.text)
-        self.font_size = max((self.font_size * h / fh, self.font_size * w / fw))
-        self._build_font(self.font_name, self.font_size)
-        self.set_surface(self._build_surface())
-        super(TextImage, self).resize(w, h)
+        anchor (default CENTER) is the object's invariant point
+        to be preserved after resizing.
+        """ 
+        fp = getattr(self, anchor)
+        fw, fh = self._font.size(self.text)
+        self._fsize = max((self._fsize * h / fh, self._fsize * w / fw))
+        self._build_font(self._fname, self._fsize)
+        self._surface = self._build_surface()
+        self.move_at(fp, anchor)
 
     def set_text (self, text):
         """
-        Set object's text to *text*, then rebuild font and surface.
+        Set object's text to the string *text*, then rebuild font and surface.
         """
-        self.text = text
-        self._build_font(self.font_name, self.font_size)
-        self.set_surface(self._build_surface())
+        self._text = text
+        self._build_font(self._fname, self._fsize)
+        self._surface = self._build_surface()
+
+    def size_of (self, string):
+        """Returns the size of string rendered using the object's font."""
+        return self._font.size(string)
 
 
-# CELL AND GRID CLASSES
-
-class Cell (Image):
-    """
-    A Cell Class. used to create objects in a strong relation with
-    another game object (only one at a time).
-    """
-    def __init__ (self, image_path, item=None, cmp_value=None):
-        self.item = item
-        self._item_attrs = {'center':None}
-        super(Cell, self).__init__(image_path, cmp_value)
-
-    @property
-    def uarea (self):
-        """The area of the union of the object's area and its item."""
-        return gameutils.rect_area(self.urect)
-
-    @property
-    def urect (self):
-        """The union of the object's rect and its item's rect (if any)."""
-        return self.rect.union(self.item.rect) if self.item else self.rect
-
-    def add_item (self, item, attrs=None, draw=False):
+class Grid (object):
+    def __init__ (self, rows, columns, size=(0,0)):
+        """Make a Grid object.
+        Provides some methods similar to other GameObject(s)
+        for resizinig and moving.
         """
-        Set the object's item. *item* Must be a GenericGameObjects or
-        compatible object. *attrs* is a mapping or a sequence of
-        (key, value) pairs of rect attrs by which *item* will be positioned,
-        maybe in respect to the cell. Despite of its original type it is
-        transformed in a collections.OrderedDict object.
-        The attribute's value can be a number (or coordinate pair), a string,
-        a callable which takes no arguments, or None.
-        Using numbers or pairs (e.g. {'topleft':(2,3), 'width':33, ...} the
-        *item* position is absolute.
-        Using a string, e.g {'left':'top', ...} the key is used as the
-        *item*'s rect attribute to set, and the value is used as the Cell's
-        rect attribute's from which take the needed value.
-        In the example above, the *item*'s rect 'left' attribute is set to
-        the value of the Cell rect's attribute 'top'.
-        Using {rect_attr:None, ...} the *item*'s rect attribute rect_attr
-        is set to the value of the Cell's rect attribute rect_attr.
-        Using a callable (such as a lambda) this object is called with no
-        arguments and the return value is used as the attribute values.
-        NOTE: moving the object when its item's attrs are relative position
-        such as 'bottom' or 'left' and not fully qualified point in the plain
-        can obviously cause the item's relative position to change.
-        The return value must be a valid rect value for the corresponding
-        attribute (i.e. despite None can be used in *attrs* as described
-        above, a callable _must_ return a right value).
-        If *attrs* is not given, *item* will be centered at the
-        Cell's rect center.
-        If *draw* is a true value, *item* will be draw immediately on the
-        Cell's surface (default to False).
-        This object can contain only one item at a time. Multiple calls of
-        add_item cause the previously item the be overwritten.
-        """
-        self.item = item
-        self.set_item_attrs(attrs or {'center':None})
-        self.update_item()
-        if draw:
-            self.item.draw_on(self.surface)
-
-    def draw_on (self, surface, background=None, draw_item=False):
-        """
-        Draw the object on *surface*. Same as the GenericGameObject's
-        draw_on method, but also permit to blit the object's item if
-        *draw_item* is set to a true value.
-        Returns the object's rect.
-        """
-        rect = super(Cell, self).draw_on(surface, background)
-        if draw_item and self.item:
-            self.item.draw_on(self.surface)
-        return rect
-
-    def move (self, x, y):
-        super(Cell, self).move(x, y)
-        self.update_item()
-        return self.rect
-
-    def move_at (self, position, anchor_at='center'):
-        super(Cell, self).move_at(position, anchor_at)
-        self.update_item()
-        return self.rect
-
-    def move_bouncing (self, bounce_rect, velocity=(None, None), union=False):
-        """
-        Move the object inside *bounce_rect* by *velocity* (a tuple,
-        default to self.velocity).
-        if *union* is a true value (default to False), bounce using
-        use the object's urect. Any way, the object's item position is
-        updated after the bounce.
-        """
-        if union:
-            orig_rect = gameutils.copy_rect(self.rect)
-            u_topleft = self.urect.topleft
-            self.rect = self.urect
-        super(Cell, self).move_bouncing(bounce_rect, velocity)
-        if union:
-            new_topleft = gameutils.move_relative_to(
-                orig_rect.topleft, u_topleft, self.rect.topleft)
-            self.rect = gameutils.copy_rect(orig_rect)
-            self.rect.topleft = new_topleft
-            #self.rect.clamp_ip(bounce_rect)
-        self.update_item()
-        return self.rect
-
-    def resize (self, w, h, update=True):
-        """
-        Resize the object..
-        If *update* is True, update immediately its item.
-        """
-        super(Cell, self).resize(w, h)
-        if update:
-            self.update_item()
-
-    def set_item_attrs(self, attrs, update=True):
-        """
-        Set the item's attr from *attrs*.
-        If *update* is True, update immediately its item.
-        """
-        self._item_attrs = collections.OrderedDict(attrs)
-        if update:
-            self.update_item()
-
-    def update_item(self):
-        """
-        Update the object's item (if any) following the
-        changes in the object.
-        """
-        if self.item:
-            for attr, value in self._item_attrs.items():
-                if value is None:
-                    setattr(self.item.rect, attr, getattr(self.rect, attr))
-                elif callable(value):
-                    setattr(self.item.rect, attr, value())
-                elif isinstance(value, str):
-                    setattr(self.item.rect, attr, getattr(self.rect, value))
-                else:
-                    setattr(self.item.rect, attr, value)
-
-
-class Grid (GenericGameObject, Table):
-    def __init__ (self, rows, columns, empty=None, seq=()):
-        """Make a Grid object."""
-        self.rect = pygame.Rect(0,0,0,0)
-        Table.__init__(self, rows, columns)
+        self._table = Table(rows, columns)
+        self._board = Board(size)
+        self._shape = Shape(self._board.surfref)
+        # default resize callback
+        def rf (obj, cell, pos):
+#            r, c = pos
+            #obj.resize(*cell.size)
+            obj.fit(cell)
+#            cell.move_at((c*cell.w, r*cell.h), 'topleft')
+#            obj.move_at(cell.center)
+        self._resize_func = rf
 
     def __eq__ (self, other):
-        return Table.__eq__(self, other)
+        return self._table ==  other
 
     def __ne__ (self, other):
         return not (self == other)
 
     def __str__ (self):
-        fill = self.fill_object.__name__ if self.fill_object else '?'
-        return "Grid object (%s, %d, %d)" % (fill, self._row, self._col)
+        return "Grid object (%d, %d) at %d" % (
+            self._table.n_rows, self.table.n_cols, id(self))
+
+    def __getitem__(self, item):
+        return self._table[item]
+
+    def __setitem__ (self, item, value):
+        self._table[item] = value
+
+    @property
+    def dims (self):
+        """Returns the grid (rows, cols) dimensions."""
+        return self._table.n_rows, self._table.n_cols
+
+    @property
+    def empty (self):
+        return self._table.empty
+
+    @property
+    def rect (self):
+        """Returns a copy of the grid's rect."""
+        return self._shape.rect
+
+    @property
+    def resize_func (self):
+        """Returns the resize function actually used in the arrange method.
+        The default function fits the object into the cell.
+        """ 
+        return self._resize_func
+    @resize_func.setter
+    def resize_func (self, func):
+        """Sets the resize function to beused in the arrange method.
+        Arguments passed to this function are:
+          - the object to the resized
+          - a Shape object, as the grid's cell
+          - the (row, col) position of the object in the grid
+        """ 
+        self._resize_func = func
+
+    @property
+    def size (self):
+        """Returns the grid's size."""
+        return self._board.size
 
     @property
     def surface (self):
-        """
-        Returns a _copy_ of the object's surface, i.e. the surface composed
-        of every object's cell surface. This is a read-only attribute.
-        """
-        surf = pygame.Surface(self.size)
-        self.draw_on(surf)
-        return surf
-    @surface.setter # XXX + TODO + FIXME: shit
-    def surface (self, surface):
-        """Does nothing, """
-        pass
+        return self._board.surface
 
-    def build (self, fill_with, fill_args=(), fill_kwords=None, cell_size=None):
-        """Build the grid with cells .... TODO WRITE DOC.... size *cell_size*."""
-        _topleft = self.rect.topleft
-        kw = {} if not fill_kwords else fill_kwords
-        for pos in self.iter_pos():
-            obj = fill_with(*fill_args, **kw)
-            if cell_size:
-                obj.resize(*cell_size)
-            self[pos] = obj
-        self.update()
+    @property
+    def surfref (self):
+        return self._board.surfref
 
-    def draw_on (self, surface, background=None):
-        """
-        Draw the grid on *surface*, and return a sequence of its
-        cells rects (to be used, for example, with pygame.display.update).
-        """
-        return list(cell.draw_on(surface) for cell in self)
+    @property
+    def isfull (self):
+        return self._table.isfull
+    def iter_pos (self):
+        return self._table.iter_pos()
+    def items (self):
+        return self._table.items()
+    def values (self):
+        return self._table.values()
 
-    def move (self, x, y):
-        """Move the grid by (*x*, *y*)."""
-        super(Grid, self).move(x, y)
-        self.update()
-        return self.rect
+    def add (self, objects, overwrite=False):
+        """Add objects to this grid stasting from the first empty position.
+        If overwrite is True, replace the objects in the current position
+        with the new ones.
+        Returns an emty list if all object were added correctly to the grid,
+        otherwise returns a list with the excluded objects.
 
-    def move_at (self, position, anchor_at='center'):
+        objects => a sequence of object to put in the grid.
+        overwrite => flag read as a bool value.
         """
-        Move the object's rect at *position*.
-        *anchor_at* (default to 'center') must be a string representing
-        a valid rect attribute and is used to determine the new position.
-        All the grid's objects are moved consequently.
-        Returns the grid's rect.
-        """
-        super(Grid, self).move_at(position, anchor_at)
-        self.update()
-        return self.rect
-                
-    def resize (self, w, h):
-        """Resize the grid and its cells to the new (*w*, *h*) size."""
-        self.rect.size = (w, h)
-        cell_size = (w / self._col, h / self._row)
-        for cell in self:
-            cell.resize(*cell_size)
-        self.update()
 
-    def shuffle (self):
-        """Shuffle the grid's cells."""
-        super(Grid, self).shuffle()
+        lst = list(reversed(objects))
+        if self.isfull:
+            return lst
+
+        for p, v in self.items():
+            if (v == self.empty) or overwrite:
+                try:
+                    self._table[p] = lst.pop()
+                except IndexError:
+                    break
+        return list(reversed(lst))
+
+    def arrange (self, update=True):
+        """Arrange the grid's objects.
+
+        update => bool value, if True (defualt) redraw the objects on the grid.
+        """
+        w, h = self.size
+        cols, rows = self._table.n_cols, self._table.n_rows
+        cell = Shape()
+        cell.resize(w/cols, h/rows)
+        left, top = self._shape.topleft
+        for r,c in self._table.iter_pos():
+            cell.move_at((c*cell.w+left, r*cell.h+top), 'topleft')
+            obj = self._table[r,c]
+            if obj != self.empty:
+                obj.move_at(cell.center)
+        if update:
+            self.update()
+ 
+    def move (self, x ,y):
+        self._shape.move(x, y)
+        self.arrange()
+
+    def move_at (self, point, anchor=CENTER):
+        self._shape.move_at(point, anchor)
+        self.arrange()
+
+    def rebuild (self, resize_func=None, update=True):
+        """Rebuild the object.
+        resize_func => function for manage object's resizing, see
+                       the doc of the resize_func property for the signature.
+                       If None use the default (or previously set) function.
+        update => bool value, if True (default) redraw the objects on the grid.
+        """
+        if resize_func is None:
+            resize_func = self._resize_func
+        w, h = self.size
+        cols, rows = self._table.n_cols, self._table.n_rows
+        cell = Shape()
+        cell.resize(w/cols, h/rows)
+        for r,c in self._table.iter_pos():
+            obj = self._table[r,c]
+            if obj != self.empty:
+                resize_func(obj, cell, (r,c))
+        self.arrange(update)
+
+    def resize (self, w, h, update=True):
+        """Resize the grid and its cells to the new (w,h) size.
+        Update the Grid contents if update is a True value.
+        """
+        self._board = Board((w,h))
+        self._shape.resize(w,h)
+        self.rebuild(update=update)
+
+    def shuffle (self, update=True):
+        """Shuffle the grid's cells.
+        Update the Grid contents if update is a True value.
+        """
+        rects = []
+        for obj in self._table.values():
+            if obj != self.empty:
+                rects.append(o.rect)
+        self._table.shuffle()
+        for obj in self._table.values():
+            if obj != self.empty:
+                obj.move_at(rects.pop().center)
         self.update()
 
     def update (self):
         """
-        Update the grid's objects position.
+        Update the grid's board.
         """
-        _topleft = self.rect.topleft
-        for row in self.rows:
-            for cell in row:
-                cell.rect.topleft = _topleft
-                _topleft = cell.rect.topright
-                self.rect.union_ip(cell.rect)
-            _topleft = row[0].rect.bottomleft
+        w, h = self.size
+        rows, cols = self.dims
+        cell = Shape()
+        cell.resize(w/cols, h/rows)
+        for (r,c), obj in self._table.items():
+            if obj != self.empty:
+                self._board.draw(obj, (c*cell.w, r*cell.h))
 
 
-class MemoryGrid (Grid):
-    """Specific Grid class for Memory game."""
-    def __init__ (self, nrows, ncolumns, cell_size=None):
-        super(MemoryGrid, self).__init__(nrows, ncolumns)
-        self.build(GenericGameObject, cell_size=cell_size)
-        self.cover = None
-
-    def draw_on_covered (self, surface, cells=None):
-        """
-        Draw the grid's cover surface on *surface*.
-        If *cells* is provided, must be a sequence of games objects or
-        compatible ones; in this case blitting them on *surface* instead
-        of the grid's cells. Returns a list of blitted rects.
-        """
-        rects = []
-        for cell in (cells or self):
-            rects.append(surface.blit(self.cover.surface, cell.rect))
-        return rects
-
-    def set_cover (self, image_or_surface):
-        """
-        Set the grid's cells cover to *image_or_surface*, a path to the target
-        image or a pygame.Surface object. If the grid is already filled with
-        game objects, the cover will be resized at the size of the first cell.
-        """
-        self.cover = Image(image_or_surface)
-        if self[0,0]:
-            self.cover.resize(*self[0,0].rect.size)
-
-
-class GridCell (Cell):
+''' #XXX+TODO: ?
+class DispatchObj (object):
+    """A container for game objects, which dispatch messagges one at a time
+    to the currently active object.
     """
-    Specialized Cell class which create objects intended to be used
-    as MemoryGrid's cell objects.
-    """
-    def __init__ (self, image_path=None, item=None, cmp_value=None):
-        super(GridCell, self).__init__(image_path, item, cmp_value)
-        self._covered = True
+    def __init__ (self, objects):
+        self._objects = list(objects)
+        self._idx = 0
+        self._active = self._objects[0]
+        self._to_all = []
+
+    def _multicall (self, methods):
+        def _inner (*a, **k):
+            r = []
+            for m in methods:
+                r.append(m(*a, **k))
+            return r
+        return _inner
+
+    def __getattr__ (self, attr):
+        if attr in ('_objects', 'objects', '_active', 'active', '_idx', '_to_all'):
+            return super(DispatchObj, self).__getattr__(attr)
+        elif attr in self._to_all:
+            return self._multicall([getattr(o, attr) for o in self._objects])
+        return getattr(self._active, attr)
+
+    def __setattr__ (self, attr, val):
+        if attr in ('_objects', 'objects', '_active', 'active', '_idx', '_to_all'):
+            return super(DispatchObj, self).__setattr__(attr, val)
+        return setattr(self._active, attr, val)
 
     @property
-    def covered (self):
-        """True if the cell is covered (default)"""
-        return self._covered
+    def active (self):
+        """Returns the currently active object."""
+        return self._active
 
-    def toggle (self):
-        """Toggle the cell's covered state."""
-        self._covered ^= True
-
-
-
-# BOX CLASSES
-
-class Box (object):
-    def __init__ (self, left=0, top=0, width=0, height=0):
-        self.rect = pygame.Rect(left, top, width, height)
-        self._items = []
-
-    def add_item (self, item, insert=False):
+    @property
+    def objects (self):
+        """Returns the hold objects."""
+        return tuple(self._objects)
+    @objects.setter
+    def objects (self, objects):
+        """Set a new  group of objects to hold.
+        The active objects of this new group become the
+        object at index of the previously active object.
+        If out of range, set as active the first object
+        in the group.
+        See the set_active to change the active object directly.
         """
-        Add *item* to Box.
-        If *insert* is not False (default) place *items* before
-        the index *insert* (a number).
+        self._objects = list(objects)
+        self._idx -= 1
+        self.next()
+
+    def add (self, obj):
+        """Add obj the the objects list."""
+        self._objects.append(obj)
+
+    def next (self):
+        try:
+            self.set_active(self._idx + 1)
+        except ValueError:
+            self.set_active(0)
+
+    def set_active (self, index=None, obj=None):
+        """Set the active object.
+        index is the index of the object to activate in the object list.
+        Instead of an index, an object can be passed as the obj param,
+        which is the object to activate.
+        If the index parameter is provided (as keyword or positional), the
+        obj argument - if any - will be ignored.
+
+        If the index is out of range or the object can't be found raise
+        a ValueError exception.
+
+        NOTE+XXX+TODO: default value of obj is None, so a None objects
+        can't be searched ad set by itself, instead the index argument
+        must be used.
         """
-        if insert is not False:
-            self._items.insert(insert, item)
-        else:
-            self._items.append(item)
+        if index is not None:
+            try:
+                self._active = self._objects[index]
+                self._idx = index
+            except IndexError as err:
+                raise ValueError(err)
+        elif obj is not None:
+            idx = self._objects.index(obj)
+            self._active = self._objects[idx]
+            self._idx = idx
 
-    def draw_on (self, surface, background=None):
+    def set_send_to_all (self, method='', action='add'):
+        """Sets which methods must be sent to all the object.
+        
+        method => method name. If empty or a false value, reset
+        the blablabla, otherwise execute action.
+        action => must be one of 'add', 'replace', 'delete'.
+                  'add' (default) adds method to the list of send-to-all
+                  methods, 'replace' add this method and throw the others,
+                  'delete'... delete all the methods.                  
         """
-        Draw the object's items on *surface*. If *background* is not None,
-        it must be a surface intended to be drawed on *surface* _before_
-        the object's surface (and at the same position).
-        The portion of *surface* drawed will be saved for and repainted by
-        the *erase* method if no other surface inteded to be drawed are
-        passed to the latter method. Note that the portion of the original
-        surface is saved _before_ blitting *background*.
+        if not method:
+            self._to_all = []
+        elif action == 'add':
+            self._to_all.append(method)
+        elif action == 'replace':
+            self._to_all = [method]
+        elif action == 'delete':
+            try:
+                self._to_all.remove(method)
+            except ValueError:
+                pass
+
+    def send_to_all (self, method_name, args=(), kwargs={}):
+        """Send a message to all the stored objects.
+        method_name is the object's method to call, with args and kwargs
+        as parameter.
         """
-        self._drawed_surface = gameutils.get_portion(surface, self.rect)
-        if background:
-            surface.blit(background, self.rect, self.rect)
-        for item in self._items:
-            item.draw_on(surface)
-
-    def erase (self, destination, surface=None, clip_area=None):
-        """
-        Erase the object's surface from *destination*, drawing *surface*
-        in its rect's area. If no *surface* is passed, or not a True value,
-        the surface generated from a previously call to the *draw_on* method
-        is used instead, otherwise raise a TypeError. *clip_area* represents
-        a smaller portion of the destination surface to draw.
-        """
-        surface = surface or self._drawed_surface
-        if not surface:
-            raise TypeError("Need a Surface to draw!")
-        return destination.blit(surface, self.rect, clip_area)
-
-    def items (self):
-        """Returns the Box's items."""
-        return self._items[:]
-
-    def move (self, x, y):
-        """
-        Move the object's rect and its items by the given offset.
-        *x* and *y* can be any integer value, positive or negative.
-        Items must provide a *move* method (same signature).
-        Returns the moved rect.
-        """
-        self.rect = self.rect.move(x, y)
-        self.update_items()
-        return self.rect
-
-    def move_at (self, position, anchor_at='center'):
-        """
-        Move the object's rect and its items at *position*.
-        *anchor_at* (default 'center') must be a string representing
-        a valid rect attribute and is used to determine the new position.
-        Items must provide a *move_at* method (same signature).
-        """
-        setattr(self.rect, anchor_at, position)
-        self.update_items()
-
-    def resize (self, w, h):
-        """
-        Try to resize the box and it's items at *w* and *h* size.
-        Items are fit inside trying to preserving proprortions and
-        the box follow their bounding, so the new box's size can be
-        smaller in respect of the chosen *w* and *h*.
-        Returns a _copy_ of the new box's rect.
-        """
-        old_w, old_h = self.rect.size
-        self.rect.size = self.rect.fit(pygame.Rect(0,0,w,h)).size
-        nw, nh = self.rect.size
-        for item in self._items:
-            new_w, new_h = item.rect.w * nw / old_w, item.rect.h * nh / old_h
-            item.resize(new_w, new_h)
-        self.update_items()
-        return gameutils.copy_rect(self.rect)
-
-    def update_item (self):
-        """To be implemented in subclasses."""
-        pass
-
-
-class Hbox (Box):
-    def __init__ (self, anchor_point='mid'):
-        """Horizontal box. mid top bottom"""
-        assert anchor_point in ('mid', 'top', 'bottom')
-        self.anchor_point = anchor_point
-        self.anchor_map = {'mid':'midleft', 'top':'topleft', 'bottom':'bottomleft'}
-        super(Hbox, self).__init__()
-
-    def add_item (self, item, insert=False):
-        super(Hbox, self).add_item(item, insert)
-        w = sum(item.rect.w for item in self._items)
-        h = sum(item.rect.h for item in self._items)
-        old_anchor = getattr(self.rect, self.anchor_map[self.anchor_point])
-        self.rect.size = (w, h)
-        setattr(self.rect, self.anchor_map[self.anchor_point], old_anchor)
-        self.update_items()
-
-    def update_items (self):
-        point = self.anchor_map[self.anchor_point]
-        x, y = getattr(self.rect, point)
-        for item in self._items:
-            item.move_at((x, y), point)
-            x += item.rect.w
-
-
-class Vbox (Box):
-    def __init__ (self, anchor_point='center'):
-        """Vertical box. left center right."""
-        assert anchor_point in ('left', 'center', 'right')
-        self.anchor_point = anchor_point
-        self.anchor_map = {'left':'topleft', 'center':'midtop', 'right':'topright'}
-        super(Vbox, self).__init__()
-
-    def add_item (self, item, insert=False):
-        super(Vbox, self).add_item(item, insert)
-        w = sum(item.rect.w for item in self._items)
-        h = sum(item.rect.h for item in self._items)
-        old_anchor = getattr(self.rect, self.anchor_map[self.anchor_point])
-        self.rect.size = (w, h)
-        setattr(self.rect, self.anchor_map[self.anchor_point], old_anchor)
-        self.update_items()
-
-    def update_items (self):
-        point = self.anchor_map[self.anchor_point]
-        x, y = getattr(self.rect, point)
-        for item in self._items:
-            item.move_at((x, y), point)
-            y += item.rect.h
+        for obj in self._objects:
+            getattr(obj, method_name)(*args, **kwargs)
+'''

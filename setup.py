@@ -13,22 +13,23 @@ from distutils.core import setup
 
 
 MODULE_NAME = 'bumpo'
-MODULE_VERSION = '0.1'
+MODULE_VERSION = '0.3'
 
 if __name__ == '__main__':
+    os.chdir(op_.dirname(op_.realpath(__file__)))
     setup(
         name=MODULE_NAME,
         version=MODULE_VERSION,
-        description="basic utility module for pygame's object",
+        description="module for create and manage game objects with pygame",
         author='Marco Chieppa (aka crap0101)',
         author_email='crap0101@riseup.net',
         maintainer='Marco Chieppa (aka crap0101)',
         maintainer_email='crap0101@riseup.net',
         license='MIT-like License',
         platforms=['platform independent'],
-        requires=['pygame(>=1.7)', 'pygtk(>=2.0.0)'],
+        requires=['pygame(>=1.7)'], #optional: 'pygtk(>=2.0.0)'],
         package_dir={'bumpo': 'src'},
-        packages = ['bumpo'],
-        py_modules=['gameObjects', 'gameutils'])
+        packages = ['bumpo', 'bumpo.plugins'],
+        )
 
 

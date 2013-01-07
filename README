@@ -1,8 +1,5 @@
-bumpo - basic utility module for pygame's objects
+bumpo - module for create and manage game objects with pygame
 
-Requires: pygame = 1.7
+Requires: pygame >= 1.7
 
 Optional: pygtk >= 2.0
-    # for svg rendering, if absent try to use svg files will fail.
-    # (error produced by gameutils module function *surface_from_svg* used in
-    # the gameObjects's *Image* class)

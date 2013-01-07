@@ -1,0 +1,6 @@
+
+baseObjects.Shape
+    - alpha & surface flags
+
+
+- gameObjects.DispatchObj actually not used... think about it.
