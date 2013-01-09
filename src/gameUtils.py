@@ -100,7 +100,7 @@ def surface_resize (surface, width, height):
     *width* and *height* must be >= 0, otherwise raise TypeError.
     """
     if width < 0 or height < 0:
-        raise ValueError("width and height must be two positive integer")
+        raise ValueError("(%d, %d), width and height must be two positive integer" % (width, height))
     try:
         return pygame.transform.smoothscale(surface, (width, height))
     except ValueError:

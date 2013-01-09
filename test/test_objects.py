@@ -509,7 +509,7 @@ class TestTextImageObject(unittest.TestCase):
                 obj2 = gameObjects.TextImage(
                     text, _DEF_FONT, _DEF_FONT_SIZE, text_color, bg_color, text)
                 for i in range(1, 10):
-                    w, h = tuple(_r(size, size*2*i) for x in 'hw')
+                    w, h = tuple(_r(size, size*2) for x in 'hw')
                     obj1.resize(w,h)
                     obj2.resize(w,h)
                     self.assertEqual(obj1, obj2)                    
@@ -551,6 +551,20 @@ class TestGrid (unittest.TestCase):
             self.setUp()
             self.assertEqual(self.grid.dims, (self.grows, self.gcols))
             self.assertEquals(self.grid.size, self.gsize)
+
+    def testGridShuffle (self):
+        for _ in range(50):
+            cell = gameObjects.GenericGameObject()
+            cell.resize(*[randint(1,50) for _ in 'wh'])
+            self.grid.add([cell.copy() for _ in range(self.grows*self.gcols)])
+            old = []
+            for i, cell in enumerate(self.grid.values()):
+                cell.compare_value = i
+                old.append(i)
+            self.grid.shuffle()
+            new = [cell.compare_value for cell in self.grid.values()]
+            self.assertNotEqual(old, new)
+            self.setUp()
 
     def testGridMove (self):
         for _ in range(10):

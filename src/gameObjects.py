@@ -403,7 +403,7 @@ class Grid (object):
         rects = []
         for obj in self._table.values():
             if obj != self.empty:
-                rects.append(o.rect)
+                rects.append(obj.rect)
         self._table.shuffle()
         for obj in self._table.values():
             if obj != self.empty:
