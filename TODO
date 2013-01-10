@@ -3,7 +3,4 @@ baseObjects.Shape
     - alpha & surface flags
 
 
-- test:
-  - gameObjects.Grid.shuffle
-
 - gameObjects.DispatchObj actually not used... think about it.

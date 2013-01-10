@@ -7,7 +7,7 @@
 
 # std imports
 from abc import ABCMeta
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, Sequence, MutableSequence
 from functools import reduce
 import operator
 import random
@@ -528,15 +528,20 @@ class Board (object):
         An optional area can be passed as well. This represents a
         smaller portion of the source surface to draw.
         If update is a true value (the default) update the screen.
+
+        obj => a Board, Shape, GameObject or pygame.Surface object
+        dest => a pygame.Rect object, a tuple of (x, y) coordinates or None
+        area => a pygame.Rect object or None
+        update => bool value (default True)
         """
-        if isinstance(dest, (BaseShape, BaseGameObject)):
-            dest = dest.rect
-        elif dest is None:
+        if isinstance(obj, pygame.Surface):
+            obj = Shape(obj)
+        if dest is None:
             dest = obj.rect
-#        elif not isinstance(dest, pygame.Rect): # topleft coordinates
-#            dest = pygame.Rect(dest, self.size)
-        if isinstance(area, (BaseShape, BaseGameObject)):
-            area = area.rect
+        elif isinstance(dest, (Sequence, MutableSequence)):
+            r = obj.rect
+            r.topleft = dest
+            dest = r
         if area is None:
             self._surface.blit(obj.surfref, dest)
         else:

@@ -634,6 +634,33 @@ class TestBoardAndDisplay (unittest.TestCase):
                 new_color = board.surfref.get_at(pos)
                 if old_color != c:
                     self.assertNotEqual(old_color, new_color)
+        # draw pygame surfaces
+        for _ in range(10):
+            w,h = size = randint(10,100), randint(10,100)
+            color = randint(1,255), randint(1,255), randint(1,255)
+            bc = (0,0,0)
+            board = clsobj(size)
+            board.fill(bc)
+            s = pygame.Surface(size)
+            s.fill(color)
+            board.draw(s)
+            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
+            board.fill(bc)
+            board.draw(s, (w/2, h/2))
+            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
+            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
+            board.fill(bc)
+            r = pygame.Rect(0,0,w/2,h/2)
+            r.topleft = r.center
+            board.draw(s, r)
+            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
+            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
+            board.fill(bc)
+            r.topleft = 0,0
+            board.draw(s, area=r)
+            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
+            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
+        # draw game objects
         for c in colors:
             for _ in range(10):
                 s = pygame.Surface((randint(1,100), randint(1,100)))
