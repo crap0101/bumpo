@@ -264,7 +264,7 @@ class Table (object):
 
     @property
     def size (self):
-        """Returns the table size as a (rows, columns pair."""
+        """Returns the table size as a (rows, columns) pair."""
         return self._row, self._col
 
     def copy (self):
@@ -353,12 +353,12 @@ class Table (object):
 
     def transposed (self):
         """Returns a transposed _copy_ of the table."""
-        new = Table(self._col, self._row)
+        new = Table(self._col, self._row, empty=self.empty)
         for pos, val in zip(new.iter_pos(), it.chain(*self.columns)):
             new[pos] = val
         return new
 
     def values (self):
         """Yields the value of each cell in the table."""
-        for _, value in self.items():
-            yield value
+        for pos in self.iter_pos():
+            yield self[pos]
