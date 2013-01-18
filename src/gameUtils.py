@@ -144,22 +144,24 @@ def scale_from_dim (w, h, length, dim=HEIGHT):
 ###########
 
 class FakeSound (object): #XXX+TODO: maybe useless. Wraps Channels and Sound object in another one?
-    """
-    A class for creating sound object that (partially) mimic
-    the behaviour of pygame.mixer.Sound object.
+    """A class for creating sound object that (partially) mimic the
+    behaviour of pygame.mixer.Sound object (but using pygame.mixer.music).
     """
     def __init__ (self, path_or_fileobj, channel=None):
         self.target = path_or_fileobj
         self.channel = channel
+
     def get_length (self):
         """Return the length of the FakeSound (in seconds)."""
         return pygame.mixer.Sound(self.target).get_length()
+
     def play (self, channel=0):
         """Begin sound playback, returns a Channel object."""
         pygame.mixer.music.load(self.target)
         pygame.mixer.music.play()
         self.channel = pygame.mixer.Channel(channel)
         return self.channel
+    
     def stop (self):
         """Stop sound playback, returns None."""
         pygame.mixer.music.stop()
