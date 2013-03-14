@@ -261,6 +261,9 @@ class Grid (object):
         return "Grid object (%d, %d) at %d" % (
             self._table.n_rows, self.table.n_cols, id(self))
 
+    def __iter__ (self):
+        return iter(self._table)
+
     def __getitem__(self, item):
         return self._table[item]
 
