@@ -324,10 +324,10 @@ class Grid (object):
         return self._table.values()
 
     def add (self, objects, overwrite=False):
-        """Add objects to this grid stasting from the first empty position.
+        """Add objects to this grid starting from the first empty position.
         If overwrite is True, replace the objects in the current position
         with the new ones.
-        Returns an emty list if all object were added correctly to the grid,
+        Returns an empty list if all object were added correctly to the grid,
         otherwise returns a list with the excluded objects.
 
         objects => a sequence of object to put in the grid.
@@ -349,7 +349,7 @@ class Grid (object):
     def arrange (self, update=True):
         """Arrange the grid's objects.
 
-        update => bool value, if True (defualt) redraw the objects on the grid.
+        update => bool value, if True (default) redraw the objects on the grid.
         """
         w, h = self.size
         cols, rows = self._table.n_cols, self._table.n_rows

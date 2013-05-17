@@ -106,7 +106,7 @@ class TestShape (unittest.TestCase):
                  type('Eggs', (object,), {}), baseObjects.GameObject(),
                  pygame.Rect(0,0,2,3), pygame.Surface((8,9)), complex(1,2))
         for fake in fakes:
-            self.assertRaises(ValueError, Shape, [fake])
+            self.assertRaises(TypeError, Shape, [fake])
 
     def testShapeAttributesAndMethods (self):
         surf = pygame.Surface((10,10), pygame.SRCALPHA)

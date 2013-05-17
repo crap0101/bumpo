@@ -59,7 +59,7 @@ class Shape (object):
         Create a new Shape instance from obj.
         obj can be a pygame.Rect, a pygame.Surface, another shape
         or None (in the latter case a zero-sized shape is created).
-        Raise ValueError for a non conforming object obj.
+        Raise TypeError for a non conforming object obj.
         """
         if obj is None:
             self._surface = pygame.Surface((0,0))
@@ -76,7 +76,7 @@ class Shape (object):
             self._rect = pygame.Rect(obj)
             self._surface = pygame.Surface(self._rect.size)
         else:
-            raise ValueError("Can't initialize a Shape object from %s" % obj)
+            raise TypeError("Can't initialize a Shape object from %s" % obj)
         #self.convert()
 
     @property
@@ -189,8 +189,15 @@ class Shape (object):
         Move and resize this Shape to fit the argument shape.
         The aspect ratio of the Shape is preserved, so the new size
         may be smaller than the target in either width or height.
+        Raise TypeError for invalid objects.
         """
-        self._rect = self._rect.fit(shape.rect)
+        if isinstance(shape, (BaseShape,BaseGameObject)):
+            rect = shape.rect
+        elif isinstance(shape, pygame.Rect):
+            rect = shape
+        else:
+            raise TypeError("Unknown object type: %s" % type(shape))
+        self._rect = self._rect.fit(rect)
         self._surface = gameUtils.surface_resize(self._surface, self.w, self.h)
         # XXX+TODO: ulteriori metodi? tipo:
         # blit, fill, subsurface (in ogni caso una copia), get_buffer (... decidere) 
@@ -226,7 +233,7 @@ class GameObject (object):
         """
         Create a new GameObject instance, optionally from an existing
         object obj, which can be a pygame.Surface, a Shape compatible
-        object or None (the default). Raise ValueError otherwise.
+        object or None (the default). Raise TypeError otherwise.
         cmp_value should be a special value which will be used in
         object's comparison, or None (the default: means id(self)).
         """
@@ -237,7 +244,7 @@ class GameObject (object):
         elif isinstance(obj, BaseShape):
             self._shape = obj.copy()
         else:
-            raise ValueError("Can't create an instance from %s" % obj)
+            raise TypeError("Can't create an instance from %s" % obj)
         self._cmp_value = id(self) if cmp_value is None else cmp_value
         self._velocity = Velocity(0,0)
         self._action_groups = defaultdict(list)
@@ -287,19 +294,19 @@ class GameObject (object):
     def _clamp (self, obj):
         """
         Clamp this object into obj (either Shape or GameObject
-        compatible object) or raise ValueError.
+        compatible object) or raise TypeError.
         """
         if isinstance(obj, BaseShape):
             self._shape.clamp(obj)
         elif isinstance(obj, BaseGameObject):
             self._shape.clamp(obj.shape)
         else:
-            raise ValueError("Unsupported object to clamp in: %s" % obj)
+            raise TypeError("Unsupported object to clamp in: %s" % obj)
 
     def clamp (self, obj):
         """
         Clamp this object into obj (either Shape or GameObject
-        compatible object) or raise ValueError.
+        compatible object) or raise TypeError.
         """
         self._clamp(obj)
 
