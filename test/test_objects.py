@@ -553,7 +553,7 @@ class TestGrid (unittest.TestCase):
             self.assertEquals(self.grid.size, self.gsize)
 
     def testGridShuffle (self):
-        for _ in range(50):
+        for _ in range(20):
             cell = gameObjects.GenericGameObject()
             cell.resize(*[randint(1,50) for _ in 'wh'])
             self.grid.add([cell.copy() for _ in range(self.grows*self.gcols)])
@@ -684,11 +684,20 @@ class TestBoardAndDisplay (unittest.TestCase):
                     board.update()
                 surf = board.surface.subsurface(obj.rect)
                 surf = surf.convert_alpha(board.surfref)
-                #pygame.image.save(obj.surface, "OBJ.png")
-                #pygame.image.save(surf, "SURF.png")
                 self.assertEqual(tostring(obj.surface, "RGB"),
                                  tostring(surf, "RGB"),
-                                 "A:%s != %s" % (obj.surface,surf))
+                                 "A:%s != %s (%s)" % (obj.surface,surf, clsobj))
+                """
+                try:
+                    self.assertEqual(tostring(obj.surface, "RGB"),
+                                 tostring(surf, "RGB"),
+                                 "A:%s != %s (%s)" % (obj.surface,surf, clsobj))
+
+                except Exception as err:
+                    pygame.image.save(obj.surface, "OBJ.png")
+                    pygame.image.save(surf, "SURF.png")
+                    raise err
+                    """
                 # draw in another position
                 s = baseObjects.Shape(obj.surface)
                 obj.move_bouncing(bound)

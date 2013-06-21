@@ -629,11 +629,12 @@ class Display (Board):
         """
         if not pygame.display.get_init():
             pygame.display.init()
+        fs_size = gameUtils.pygame_display_size()
         self._surface = pygame.display.set_mode(size, flags)
         self._default_size_and_mode = type(
             'DefSizeMode', (), {'size':size, 'flags':flags})
         self._fullscreen_size_and_mode = type(
-            'FullScrrenSizeMode', (), {'size':(0,0), 'flags':pygame.FULLSCREEN})
+            'FullScrrenSizeMode', (), {'size':fs_size, 'flags':pygame.FULLSCREEN})
 
     def resize (self, w, h, update=True):
         """

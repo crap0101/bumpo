@@ -53,6 +53,15 @@ def convert (surface, obj=None, alpha=True):
     return surf
 
 
+def pygame_display_size ():
+    """Return (w,h) size, the width and height of the current video mode,
+    or of the desktop mode if called before the display.set_mode is called.
+    Raise pygame.error if the video sistem is not intialized.
+    """
+    vi = pygame.display.Info()
+    return vi.current_w, vi.current_h
+
+
 def finddiv (n):
     """
     Returns a pair of (rows, cols) for an hypothetical
