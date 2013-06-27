@@ -274,7 +274,7 @@ class GameObject (object):
         return self._cmp_value == other
 
     def __ne__ (self, other):
-        return self._cmp_value != other
+        return not self == other
 
     def __getattr__ (self, attr):
         """Get some attributes from the object's shape."""

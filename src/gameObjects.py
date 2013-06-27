@@ -363,14 +363,18 @@ class Grid (object):
                 obj.move_at(cell.center)
         if update:
             self.update()
- 
-    def move (self, x ,y):
-        self._shape.move(x, y)
-        self.arrange()
 
-    def move_at (self, point, anchor=CENTER):
+    def move (self, x ,y, update=False):
+        self._shape.move(x, y)
+        self.arrange(update)
+
+    def move_at (self, point, anchor=CENTER, update=False):
         self._shape.move_at(point, anchor)
-        self.arrange()
+        self.arrange(update)
+
+    def positions (self, item):
+        """Return a list of grid positions which olds *item*."""
+        return list(self._table.get(item))
 
     def rebuild (self, resize_func=None, update=True):
         """Rebuild the object.
@@ -401,7 +405,7 @@ class Grid (object):
 
     def shuffle (self, update=True):
         """Shuffle the grid's cells.
-        Update the Grid contents if update is a True value.
+        Update the Grid contents if update is a True value (default).
         """
         rects = []
         for obj in self._table.values():
@@ -411,7 +415,8 @@ class Grid (object):
         for obj in self._table.values():
             if obj != self.empty:
                 obj.move_at(rects.pop().center)
-        self.update()
+        if update:
+            self.update()
 
     def update (self):
         """

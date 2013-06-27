@@ -1,4 +1,6 @@
 
+- aggiungere test per Grid.positions (in realtà usa Table.get già testato)
+
 baseObjects.Shape
     - alpha & surface flags
 
