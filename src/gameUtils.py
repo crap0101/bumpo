@@ -52,6 +52,9 @@ def convert (surface, obj=None, alpha=True):
         surf.set_alpha(obj.get_alpha())
     return surf
 
+def edistance (seq1, seq2):
+    """Returns the Euclidean distance between *seq1* and *seq2*."""
+    return sum((c1-c2)**2 for c1,c2 in zip(seq1, seq2))**.5
 
 def pygame_display_size ():
     """Return (w,h) size, the width and height of the current video mode,
