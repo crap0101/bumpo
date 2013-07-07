@@ -358,7 +358,6 @@ class GameObject (object):
             vy = -y
         self.move(x, y)
         self._clamp(obj)
-        self._velocity = Velocity(vx, vy)
 
     def move_random (self, obj=None, xbound=None, ybound=None):
         """
