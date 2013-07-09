@@ -13,7 +13,7 @@ from distutils.core import setup
 
 
 MODULE_NAME = 'bumpo'
-MODULE_VERSION = '0.3'
+MODULE_VERSION = '0.3.1'
 
 if __name__ == '__main__':
     os.chdir(op_.dirname(op_.realpath(__file__)))
