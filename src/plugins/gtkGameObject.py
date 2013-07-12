@@ -115,14 +115,14 @@ class GtkGameObject (GameObject):
             self._reload_on_resize = bool(reload)
 
     @property
-    def reload (self): 
+    def reload_on_resize (self): 
         """
         Returns the boolean value used by other methods (resize, fit, etc.)
         for decide if reload the object's source image before doing their job.
         """
         return self._reload_on_resize
-    @reload.setter
-    def reload (self, value):
+    @reload_on_resize.setter
+    def reload_on_resize (self, value):
         """
         If set to a true value, resizing, fitting or any other operation
         which cause changing the object's dimensions will be performed

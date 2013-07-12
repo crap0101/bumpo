@@ -293,10 +293,12 @@ class GameObject (object):
 
     def _clamp (self, obj):
         """
-        Clamp this object into obj (either Shape or GameObject
+        Clamp this object into obj (a pygame.Rect, a Shape or GameObject
         compatible object) or raise TypeError.
         """
-        if isinstance(obj, BaseShape):
+        if isinstance(obj, pygame.Rect):
+            self._shape.clamp(Shape(obj))
+        elif isinstance(obj, BaseShape):
             self._shape.clamp(obj)
         elif isinstance(obj, BaseGameObject):
             self._shape.clamp(obj.shape)
@@ -305,7 +307,7 @@ class GameObject (object):
 
     def clamp (self, obj):
         """
-        Clamp this object into obj (either Shape or GameObject
+        Clamp this object into obj (a pygame.Rect, a Shape or GameObject
         compatible object) or raise TypeError.
         """
         self._clamp(obj)
@@ -346,9 +348,9 @@ class GameObject (object):
 
     def move_bouncing (self, obj, velocity=None):
         """
-        Move the object bouncing inside *obj* (either a GameObject
-        or Shape object) by velocity, a pair of integer values, or
-        None (in the latter case, the object's own velocity is used).
+        Move the object bouncing inside *obj* (either a pygame.Rect, a
+        GameObject or Shape object) by velocity, a pair of integer values,
+        or None (in the latter case, the object's own velocity is used).
         """
         x, y = velocity if velocity is not None else self.velocity
         vx, vy = x, y
