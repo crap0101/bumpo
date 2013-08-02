@@ -71,9 +71,7 @@ def surface_from_file__gtk3 (filepath, size=None):
     taken from the file).
     """
     if size is None:
-        print "XXXXX"*3,filepath
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(filepath)
-        print "YYYYYYYY"
         size = pixbuf.get_width(), pixbuf.get_height()
     else:
         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(filepath, *size)
