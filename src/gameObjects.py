@@ -170,8 +170,10 @@ class TextImage (GenericGameObject):
         # Cfr. http://pygame.motherhamster.org/bugzilla/show_bug.cgi?id=49
         # fixed: http://hg.pygame.org/pygame/changeset/6cc8196e0181
         if self._bgc is None:
-            return self._font.render(self.text, True, self._fgc)
-        return self._font.render(self.text, True, self._fgc, self._bgc)
+            return self._font.render(
+                self.text.decode('utf-8'), True, self._fgc)
+        return self._font.render(
+            self.text.decode('utf-8'), True, self._fgc, self._bgc)
         
     def _build_font (self, name, size):
         """Build the font."""
