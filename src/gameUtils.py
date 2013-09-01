@@ -11,10 +11,9 @@
 # std imports
 import math
 import random
-import operator
 import itertools as it
 # local imports
-from const import HEIGHT, WIDTH, ALPHA_CONV, NORMAL_CONV
+from const import HEIGHT, WIDTH
 # external imports
 import pygame
 

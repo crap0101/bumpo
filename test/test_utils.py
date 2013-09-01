@@ -241,7 +241,6 @@ class TestSurfaces (unittest.TestCase):
         resize = gameUtils.surface_resize
         for _ in range(100):
             surf = pygame.Surface((r(1,1000),r(1,1000)))
-            size = surf.get_size()
             newsize = r(1,1000), r(1,1000)
             newsurf = resize(surf, *newsize)
             self.assertEqual(newsurf.get_size(), newsize)

@@ -13,7 +13,6 @@ various type of game objects.
 
 # std imports
 from collections import OrderedDict
-import itertools as it
 # local imports
 from baseObjects import GameObject, Shape, Board
 import gameUtils
@@ -63,7 +62,6 @@ class GenericGameObject (GameObject):
         """
         if value and self._filepath:
             size = self.size
-            m = max(size)
             self._shape = self._shape.__class__(
                 gameUtils.surface_from_file(self._filepath))
             self.convert()

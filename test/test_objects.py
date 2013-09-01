@@ -24,7 +24,7 @@ from pygame.locals import *
 pwd = op_.dirname(op_.realpath(__file__))
 
 try:
-    from bumpo import const, gameObjects, baseObjects, gameUtils
+    from bumpo import const, gameObjects, baseObjects
     try:
         from bumpo.plugins import gtkGameObject
         HAVE_GTK = True
@@ -35,7 +35,7 @@ except ImportError:
     sys.path.insert(0, os.getcwd())
     __import__('src')
     bumpo = sys.modules['bumpo'] = sys.modules['src']
-    from bumpo import const, gameObjects, baseObjects, gameUtils
+    from bumpo import const, gameObjects, baseObjects
     try:
         from bumpo.plugins import gtkGameObject
         HAVE_GTK = True
@@ -111,7 +111,6 @@ class TestShape (unittest.TestCase):
     def testShapeAttributesAndMethods (self):
         surf = pygame.Surface((10,10), pygame.SRCALPHA)
         c = get_random_color()
-        alpha = c[3]
         surf.fill(pygame.Color(*c))
         shape = baseObjects.Shape(surf)
         shape.move_at((randint(-1000,1000),randint(-1000,1000)))
@@ -168,14 +167,12 @@ class TestGameObjects (unittest.TestCase):
             baseObjects.Shape(pygame.Surface((100,100))))
         for name, (func, args) in _acts.items():
             obj.set_action(func(obj), args, group=name)
-        start_topleft = topleft = obj.rect.topleft
+        topleft = obj.rect.topleft
         for i in range(10):
             for a in _acts:
                 obj.raise_actions(a)
                 topleft = tuple(map(sum, zip(topleft, _acts[a][1])))
                 self.assertEqual(obj.topleft, topleft)
-        group_r = [(obj.move, (2, 2,), {})]
-        group_s = [(obj.move, (-2, -2,), {})]
         acts = dict(_acts)
         for name, (f, args) in acts.items():
             self.assertEqual(obj.del_action_group(name), [(f(obj), args, {})])
@@ -283,7 +280,6 @@ class TestGameObjects (unittest.TestCase):
             clampshape = baseObjects.Shape()
             for size in ((randint(1,900), randint(1,500)) for _ in range(50)):
                 # resize
-                s = obj.size
                 obj.resize(*size)
                 self.assertEqual(obj.size, size)
                 # clamp
@@ -496,7 +492,6 @@ class TestTextImageObject(unittest.TestCase):
             for font_path in self.fonts_path:
                 text_color = get_random_color()
                 bg_color = get_random_color()
-                font = pygame.font.Font(font_path, size)
                 # test (un)equality for TextImage
                 obj1 = gameObjects.TextImage(
                     text, _DEF_FONT, _DEF_FONT_SIZE, text_color, bg_color)
@@ -599,7 +594,6 @@ class TestGrid (unittest.TestCase):
             sub = randint(1, total-2)
             objs = [GE(cmp_value=i) for i in range(sub)]
             rest = []
-            add = 0
             for i in range(total/sub+1):
                 rest = self.grid.add(objs)
             self.assertEqual(sub-total%sub, len(rest))

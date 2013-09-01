@@ -359,6 +359,7 @@ class GameObject (object):
         if (self.bottom + y >= obj.bottom or self.top + y <= obj.top):
             vy = -y
         self.move(x, y)
+        self.velocity = (vx,vy)
         self._clamp(obj)
 
     def move_random (self, obj=None, xbound=None, ybound=None):
@@ -578,7 +579,7 @@ class Board (object):
         else:
             self.set_flags(reduce(operator.ior, args))
 
-    def resize (w, h, update=True):
+    def resize (self, w, h, update=True):
         """
         Resize this board at the new width and height.
         If update is a true value (the default) update the board.
@@ -590,7 +591,7 @@ class Board (object):
         if update:
             self.update()
 
-    def set_flags (flags, update=True):
+    def set_flags (self, flags, update=True):
         """
         Set the board's surface flags to `flags` (an integer value).
         If update is a true value (the default) update the board.
