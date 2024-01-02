@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2010  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING in the root directory of this package.
 
 """
@@ -13,11 +13,12 @@ various type of game objects.
 
 # std imports
 from collections import OrderedDict
+import os
 # local imports
-from baseObjects import GameObject, Shape, Board
-import gameUtils
-from gameUtils import Table
-from const import WIDTH, HEIGHT, CENTER
+from bumpo.baseObjects import GameObject, Shape, Board
+from bumpo import gameUtils
+from bumpo.gameUtils import Table
+from bumpo.const import WIDTH, HEIGHT, CENTER
 # external imports
 import pygame
 
@@ -30,18 +31,17 @@ class GenericGameObject (GameObject):
     """
     def __init__ (self, obj=None, cmp_value=None, reload=None):
         """
-        TODO: doc
-        create a new game object for a BaseShape, pygame.Surface, file
+        XXX+TODO: better doc
+        create a new game object from a Shape, pygame.Surface or file
         if reload == None use the class-level attribute.
         """
-        if isinstance(obj, basestring):
+        if isinstance(obj, str):
             self._filepath = obj
             obj = gameUtils.surface_from_file(obj)
         else:
             self._filepath = None
-        super(GenericGameObject, self).__init__(obj, cmp_value)
+        super().__init__(obj, cmp_value)
         self.convert()
-        self._orig_shape = self.shape
         if reload is not None:
             self._reload_on_resize = bool(reload)
 
@@ -57,13 +57,12 @@ class GenericGameObject (GameObject):
         """
         If set to a true value, resizing, fitting or any other operation
         which cause changing the object's dimensions will be performed
-        possibly reloading the original shape image (Shape, GameObject
+        possibly reloading the original object (Shape, GameObject
         or whatever) if information loss can happen.
         """
         if value and self._filepath:
             size = self.size
-            self._shape = self._shape.__class__(
-                gameUtils.surface_from_file(self._filepath))
+            self.set_surface(gameUtils.surface_from_file(self._filepath))
             self.convert()
             self.resize(*size)
         self._reload_on_resize = bool(value)
@@ -77,12 +76,9 @@ class GenericGameObject (GameObject):
         if self._reload_on_resize:
             if obj.w > self.w or obj.h > self.h:
                 if self._filepath:
-                    self._shape = self._shape.__class__(
-                        gameUtils.surface_from_file(self._filepath))
+                    self.set_surface(gameUtils.surface_from_file(self._filepath))
                     self.convert()
-                else:
-                    self._shape = self._orig_shape.copy()
-        super(GenericGameObject, self).fit(obj)
+        super().fit(obj)
 
     def resize (self, width, height, anchor=CENTER):
         """
@@ -94,12 +90,9 @@ class GenericGameObject (GameObject):
         if self._reload_on_resize:
             if width > self.w or height > self.h:
                 if self._filepath:
-                    self._shape = self._shape.__class__(
-                        gameUtils.surface_from_file(self._filepath))
+                    self.set_surface(gameUtils.surface_from_file(self._filepath))
                     self.convert()
-                else:
-                    self._shape = self._orig_shape.copy()
-        super(GenericGameObject, self).resize(width, height)
+        super().resize(width, height)
         self.move_at(fp, anchor)
 
     def resize_perc_from (self, obj, perc, anchor=CENTER):
@@ -126,8 +119,7 @@ class GenericGameObject (GameObject):
         w, h = gameUtils.scale_from_dim(self.w, self.h, length, dim)
         self.resize(w, h, anchor)
 
-    #XXX+TODO
-    def _rotate (self, angle, anchor_at='center'):
+    def _rotate (self, angle, anchor_at='center'):  #XXX+TODO
         """
         Rotate the object's surface by *angle* amount. Could be a float value.
         Negative angle amounts will rotate clockwise. *anchor_at* is the rect
@@ -143,47 +135,65 @@ class TextImage (GenericGameObject):
         Create a TextImage object: *obj* can be the string to be displayed
         or another TextImage object or anything with a text attribute which
         will be used as the text to display.
-        *fname* can be either a filename or a font name, in the latter
-        case the font must be present in the system, otherwise a random
-        available font is used instead;
+        *fname* can be either a filename, a font name or a pygame.font.Font
+        object. If a filepath, must be present in the system, otherwise a
+        random available font is used instead.
         *fsize* is the initial size of the font.
         *fgc* is the foreground color, used for blit the text.
         *bgc* is the background color (default to None, i.e. transparent).
         """
-        if isinstance(obj, basestring):
+        if isinstance(obj, str):
             self._text = obj
         else:
             self._text = obj.text
-        self._fname = fname
-        self._fsize = fsize
+        self._fname = None # set by _set_font_source
+        self._fpath = None # set by _set_font_source
+        self._set_font_source(fname)
+        self._fsize = int(fsize)
         self._bgc = bgc
         self._fgc = fgc
-        self._font = None  # the font returned by _build_font
+        self._font = None  # the font set by _build_font
         self._build_font(fname, fsize)
-        super(TextImage, self).__init__(self._build_surface(), cmp_value)
+        super().__init__(self._build_surface(), cmp_value)
 
+    def _set_font_source(self, name_or_path):
+        if (not name_or_path) or isinstance(name_or_path, pygame.font.Font):
+            self._fpath = None
+            self._fname = None
+        elif os.path.exists(name_or_path):
+            self._fpath = name_or_path
+            self._fname = None
+        else:
+            self._fname = name_or_path
+            self._fpath = None
+            
     def _build_surface (self):
         """Builds and returns the object's surface."""
-        # NOTE: pygame BUG
-        # Cfr. http://pygame.motherhamster.org/bugzilla/show_bug.cgi?id=49
-        # fixed: http://hg.pygame.org/pygame/changeset/6cc8196e0181
         if self._bgc is None:
             return self._font.render(
-                self.text.decode('utf-8'), True, self._fgc)
+                self.text.encode('utf-8'), True, self._fgc)
         return self._font.render(
-            self.text.decode('utf-8'), True, self._fgc, self._bgc)
+            self.text.encode('utf-8'), True, self._fgc, self._bgc)
         
-    def _build_font (self, name, size):
-        """Build the font."""
-        self._fname = name
-        self._fsize = size
-        try:
-            self._font = pygame.font.Font(self._fname, self._fsize)
-        except IOError:
-            self._font = pygame.font.SysFont(self._fname, self._fsize)
-        except RuntimeError:
-            self._font = pygame.font.SysFont(
-                ','.join(pygame.font.get_fonts()), self._fsize)
+    def _build_font (self, name_or_font, size):
+        """Build the font.
+        name_or_font => the name or a font, a path of the font file
+                        or a pygame.font.Font object.
+        size         => the font size.
+        """
+        self._fsize = int(size)
+        if isinstance(name_or_font, pygame.font.Font):
+            self._font = name_or_font
+        else:
+            try:
+                p = (self._fpath if self._fpath
+                     else pygame.font.match_font(self._fname))
+                self._font = pygame.font.Font(p, self._fsize)
+            except FileNotFoundError:
+                self._font = pygame.font.SysFont(self._fname, self._fsize)
+            except RuntimeError:
+                self._font = pygame.font.SysFont(
+                    ','.join(pygame.font.get_fonts()), self._fsize)
 
     @property
     def bg (self):
@@ -215,9 +225,9 @@ class TextImage (GenericGameObject):
         """ 
         fp = getattr(self, anchor)
         fw, fh = self._font.size(self.text)
-        self._fsize = max((self._fsize * h / fh, self._fsize * w / fw))
+        self._fsize = max((self._fsize * h // fh, self._fsize * w // fw))
         self._build_font(self._fname, self._fsize)
-        self._surface = self._build_surface()
+        self.set_surface(self._build_surface())
         self.move_at(fp, anchor)
 
     def set_text (self, text):
@@ -226,7 +236,7 @@ class TextImage (GenericGameObject):
         """
         self._text = text
         self._build_font(self._fname, self._fsize)
-        self._surface = self._build_surface()
+        self.set_surface(self._build_surface())
 
     def size_of (self, string):
         """Returns the size of string rendered using the object's font."""
@@ -244,11 +254,7 @@ class Grid (object):
         self._shape = Shape(self._board.surfref)
         # default resize callback
         def rf (obj, cell, pos):
-#            r, c = pos
-            #obj.resize(*cell.size)
             obj.fit(cell)
-#            cell.move_at((c*cell.w, r*cell.h), 'topleft')
-#            obj.move_at(cell.center)
         self._resize_func = rf
 
     def __eq__ (self, other):
@@ -258,7 +264,7 @@ class Grid (object):
         return not (self == other)
 
     def __str__ (self):
-        return "Grid object (%d, %d) at %d" % (
+        return "Grid object ({}, {}) at {}".format(
             self._table.n_rows, self.table.n_cols, id(self))
 
     def __iter__ (self):
@@ -330,8 +336,8 @@ class Grid (object):
         Returns an empty list if all object were added correctly to the grid,
         otherwise returns a list with the excluded objects.
 
-        objects => a sequence of object to put in the grid.
-        overwrite => flag read as a bool value.
+        objects   => a sequence of object to put in the grid.
+        overwrite => boolean flag.
         """
 
         lst = list(reversed(objects))
@@ -354,11 +360,11 @@ class Grid (object):
         w, h = self.size
         cols, rows = self._table.n_cols, self._table.n_rows
         cell = Shape()
-        cell.resize(w/cols, h/rows)
+        cell.resize(w // cols, h // rows)
         left, top = self._shape.topleft
-        for r,c in self._table.iter_pos():
-            cell.move_at((c*cell.w+left, r*cell.h+top), 'topleft')
-            obj = self._table[r,c]
+        for r, c in self._table.iter_pos():
+            cell.move_at((c * cell.w + left, r * cell.h + top), 'topleft')
+            obj = self._table[r, c]
             if obj != self.empty:
                 obj.move_at(cell.center)
         if update:
@@ -381,26 +387,26 @@ class Grid (object):
         resize_func => function for manage object's resizing, see
                        the doc of the resize_func property for the signature.
                        If None use the default (or previously set) function.
-        update => bool value, if True (default) redraw the objects on the grid.
+        update      => bool: if True (default) redraw the objects on the grid.
         """
         if resize_func is None:
             resize_func = self._resize_func
         w, h = self.size
         cols, rows = self._table.n_cols, self._table.n_rows
         cell = Shape()
-        cell.resize(w/cols, h/rows)
-        for r,c in self._table.iter_pos():
-            obj = self._table[r,c]
+        cell.resize(w // cols, h // rows)
+        for r, c in self._table.iter_pos():
+            obj = self._table[r, c]
             if obj != self.empty:
-                resize_func(obj, cell, (r,c))
+                resize_func(obj, cell, (r, c))
         self.arrange(update)
 
     def resize (self, w, h, update=True):
         """Resize the grid and its cells to the new (w,h) size.
         Update the Grid contents if update is a True value.
         """
-        self._board = Board((w,h))
-        self._shape.resize(w,h)
+        self._board = Board((w, h))
+        self._shape.resize(w, h)
         self.rebuild(update=update)
 
     def shuffle (self, update=True):
@@ -425,13 +431,13 @@ class Grid (object):
         w, h = self.size
         rows, cols = self.dims
         cell = Shape()
-        cell.resize(w/cols, h/rows)
-        for (r,c), obj in self._table.items():
+        cell.resize(w // cols, h // rows)
+        for (r, c), obj in self._table.items():
             if obj != self.empty:
-                self._board.draw(obj, (c*cell.w, r*cell.h))
+                self._board.draw(obj, (c * cell.w, r * cell.h))
 
 
-''' #XXX+TODO: ?
+''' #XXX+TODO: ??? don't remember for which this is for  xD
 class DispatchObj (object):
     """A container for game objects, which dispatch messagges one at a time
     to the currently active object.
@@ -452,14 +458,14 @@ class DispatchObj (object):
 
     def __getattr__ (self, attr):
         if attr in ('_objects', 'objects', '_active', 'active', '_idx', '_to_all'):
-            return super(DispatchObj, self).__getattr__(attr)
+            return super().__getattr__(attr)
         elif attr in self._to_all:
             return self._multicall([getattr(o, attr) for o in self._objects])
         return getattr(self._active, attr)
 
     def __setattr__ (self, attr, val):
         if attr in ('_objects', 'objects', '_active', 'active', '_idx', '_to_all'):
-            return super(DispatchObj, self).__setattr__(attr, val)
+            return super().__setattr__(attr, val)
         return setattr(self._active, attr, val)
 
     @property

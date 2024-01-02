@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2010  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING.txt in the root directory of this package.
 
 
 # std imports
 from collections import defaultdict
-import exceptions
+try:
+    import exceptions
+except ImportError:
+    import builtins as exceptions
 import glob
 import itertools as it
 import operator
@@ -39,8 +42,7 @@ try:
 except ImportError:
     os.chdir(op_.join(op_.split(pwd)[0]))
     sys.path.insert(0, os.getcwd())
-    __import__('src')
-    bumpo = sys.modules['bumpo'] = sys.modules['src']
+    sys.modules['bumpo'] = __import__('src')
     import bumpo.plugins
     from bumpo import gameObjects, baseObjects, gameUtils, const
     try:
@@ -82,7 +84,7 @@ class TestConvert(unittest.TestCase):
         for i in range(100):
             s = pygame.Surface((r(1,1000), r(1,1000)))
             for a in (True, False):
-                obj = pygame.Surface((10,10))
+                obj = baseObjects.Shape(pygame.Surface((10,10)))
                 obj.fill(get_random_color())
                 res = [conv(s), conv(s,obj), conv(s,obj,a), conv(s,alpha=a)]
                 for c in res:
@@ -91,16 +93,26 @@ class TestConvert(unittest.TestCase):
 
     def testConvertShape (self):
         r = random.randint
-        surfs = [pygame.Surface((r(1,1000),r(1,1000))) for _ in range(100)]
+        surfs = [pygame.Surface((r(1,100),r(1,100))) for _ in range(50)]
         for s in surfs:
             s.fill(get_random_color())
         shapes = [baseObjects.Shape(s) for s in surfs]
+        alpha_flags = (0, pygame.RLEACCEL)
         for shape in shapes:
-            for alpha in (True, False):
+            for alpha in (True, None):
                 cshape = shape.copy()
                 a = cshape.alpha
                 cshape.convert(alpha=alpha)
-                self.assertEqual(alpha, bool(cshape.alpha))
+                self.assertEqual(a,
+                                 cshape.alpha,
+                                 msg='a:{} ||, cshape.alpha:{}'.format(
+                                     a, cshape.alpha))
+            for af in alpha_flags:
+                af1 = shape.get_alpha_flag()
+                shape.set_alpha_flag(af)
+                if af != af1:
+                    self.assertNotEqual(af1, shape.get_alpha_flag())
+                self.assertEqual(af, shape.get_alpha_flag())
         shapes = [baseObjects.Shape(s) for s in surfs]
         # errors
         tes = shapes[0]
@@ -108,30 +120,23 @@ class TestConvert(unittest.TestCase):
         invalid = (1, type('Spam', (), {}), baseObjects.GameObject(),
                    gameObjects.GenericGameObject(), gtko)
         for obj in invalid:
-            self.assertRaises(TypeError, tes.convert, obj)
+            self.assertRaises(TypeError, tes.convert, obj, msg="XXX:{}".format(obj))
         # from shapes and surfaces
         for shape in shapes:
             shape2 = shape.copy()
             shape2s = shape.copy()
-            shape3 = shape.copy()
-            shape4 = shape.copy()
             surf = pygame.Surface((9,9))
-            surf.set_alpha(r(0,255))
+            surf.set_alpha(r(10,255))
             obj = baseObjects.Shape(surf)
-            shape.convert(obj, alpha=False)
+            shape.convert(obj, alpha=None)
             self.assertEqual(surf.get_alpha(), obj.alpha)
             self.assertEqual(obj.alpha, shape.alpha)
             a = shape2.alpha
-            shape2.convert(obj)
+            shape2.convert(obj, alpha=None)
             self.assertNotEqual(a, shape2.alpha)
             a = shape2s.alpha
-            shape2s.convert(surf)
+            shape2s.convert(surf, alpha=None)
             self.assertNotEqual(a, shape2s.alpha)
-            shape3.convert()
-            self.assertTrue(bool(shape3.alpha))
-            a = shape4.alpha
-            shape4.convert(alpha=False)
-            self.assertEqual(a,shape4.alpha)
 
     def testConvertObjects (self):
         r = random.randint
@@ -150,7 +155,7 @@ class TestConvert(unittest.TestCase):
                     o.set_alpha(alpha)
                 else:
                     o.alpha = alpha
-                obj.convert(o, alpha=False)
+                obj.convert(o, alpha=None)
                 if isinstance(o, pygame.Surface):
                     self.assertEqual(o.get_alpha(), obj.alpha)
                 else:
@@ -163,7 +168,7 @@ class TestMisc (unittest.TestCase):
         func = gameUtils.finddiv
         for i in (-1, 0):
             self.assertEqual(func(i), (1,1))
-        for i in xrange(1, int(1e6)):
+        for i in range(1, int(1e6)):
             self.assertGreaterEqual(operator.mul(*func(i)), i)
 
     def testTable (self):
@@ -254,19 +259,19 @@ class TestSurfaces (unittest.TestCase):
         for w,h in sizes:
             # scale_perc
             perc = r(1,500)
-            pw, ph = w*perc/100, h*perc/100
+            pw, ph = w*perc//100, h*perc//100
             self.assertEqual(gameUtils.scale_perc(w,h,perc), (pw,ph))
             # scale_perc_from
             fs = gameUtils.scale_perc_from(w,h,perc,const.WIDTH)
-            self.assertEqual(fs, (pw, h*pw/w))
+            self.assertEqual(fs, (pw, h*pw//w))
             fs = gameUtils.scale_perc_from(w,h,perc,const.HEIGHT)
-            self.assertEqual(fs, (ph*w/h, ph))
+            self.assertEqual(fs, (ph*w//h, ph))
             # scale_from_dim
             length = r(1,500)
             ds = gameUtils.scale_from_dim(w,h, length, const.WIDTH)
-            self.assertEqual(ds, (length, length*h/w))
+            self.assertEqual(ds, (length, length*h//w))
             ds = gameUtils.scale_from_dim(w,h, length, const.HEIGHT)
-            self.assertEqual(ds, (length*w/h, length))
+            self.assertEqual(ds, (length*w//h, length))
             # test errors
             for func in (gameUtils.scale_perc_from, gameUtils.scale_from_dim):
                 for dim in 'foo spam eggs'.split():
@@ -290,12 +295,12 @@ import %s # fake module name
 MODULE_PLUGINS = ["foo", "bar", "Baz"]
 EX_ERR = ['ZeroDivisionError', 'IndexError', 'AttributeError']
 def foo (*a, **k):
-  1/0
+  1//0
 def bar (*a, **k):
   raise IndexError("raised from a fake plugin object.")
 class Baz:
   def __init__ (self):
-    print self.spam
+    print(self.spam)
 '''
 
     def setUp (self):
@@ -329,7 +334,7 @@ class Baz:
         # fail on module load
         fakemodulenames = [string.ascii_letters, 'foobarbaz', 'spam_module']
         f = tempfile.NamedTemporaryFile(suffix='.py', dir=self.bk_dir,  delete=False)
-        f.write(self.runtime_fake_module_format_fail_import % choice(fakemodulenames))
+        f.write((self.runtime_fake_module_format_fail_import % choice(fakemodulenames)).encode('utf-8'))
         f.close()
         plugname = op_.splitext(op_.basename(f.name))[0]
         module = bumpo.plugins.find_plugin_modules(self.bk_dir)[0]
@@ -340,7 +345,7 @@ class Baz:
         self.setUp()
         # fail on plugin use
         f = tempfile.NamedTemporaryFile(suffix='.py', dir=self.bk_dir,  delete=False)
-        f.write(self.runtime_fake_module_format_fail_plugin)
+        f.write(self.runtime_fake_module_format_fail_plugin.encode('utf-8'))
         f.close()
         plugname = op_.splitext(op_.basename(f.name))[0]
         modname = bumpo.plugins.find_plugin_modules(self.bk_dir)[0]

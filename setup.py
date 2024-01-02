@@ -9,7 +9,7 @@ import sys
 import shutil
 import subprocess
 import os.path as op_
-from distutils.core import setup
+from setuptools import setup
 
 
 MODULE_NAME = 'bumpo'

@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2010  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING in the root directory of this package.
 
 
 # std imports
-from StringIO import StringIO
+from io import StringIO
 import tempfile
+
 # local imports
 from bumpo.baseObjects import GameObject
 from bumpo.const import WIDTH, HEIGHT, CENTER
 from bumpo import gameUtils
+
 # external imports
 import pygame
 
@@ -23,7 +25,8 @@ try:
     import gtk
     GTK_VERSION = 2
 except ImportError:
-    #from gi.repository import Gtk #as gtk
+    import gi
+    gi.require_version('GdkPixbuf', '2.0')
     from gi.repository import GdkPixbuf
     GTK_VERSION = 3
 
@@ -92,23 +95,23 @@ else:
 
 
 class GtkGameObject (GameObject):
-    """DOC: TODO
-    copied resize_* and scale_* methods to be compatible with GenericGameObject
-    (also the _reload_on_resize class attribute)
+    """DOC: XXX+TODO
+    copied resize_* and scale_* methods to be compatible with
+    GenericGameObject (also the _reload_on_resize class attribute)
     """
     _reload_on_resize = True
     def __init__ (self, obj=None, cmp_value=None, reload=None):
         """
         TODO: doc
         """
-        if isinstance(obj, basestring):
+        if isinstance(obj, str):
             self._filepath = obj
             obj = surface_from_file__gtk(obj)
         else:
             self._filepath = None
-        super(GtkGameObject, self).__init__(obj, cmp_value)
+        super().__init__(obj, cmp_value)
         self.convert()
-        self._orig_shape = self.shape
+        #self._orig_shape = self.shape #XXX+TODO: need this???
         if reload is not None:
             self._reload_on_resize = bool(reload)
 
@@ -131,7 +134,7 @@ class GtkGameObject (GameObject):
             size = self.size
             m = max(size)
             self._shape = self._shape.__class__(
-                surface_from_file__gtk(self._filepath, (m,m)))
+                surface_from_file__gtk(self._filepath, (m, m)))
             self.convert()
             self.resize(*size)
         self._reload_on_resize = bool(value)
@@ -147,11 +150,11 @@ class GtkGameObject (GameObject):
                 if self._filepath:
                     m = max(obj.w, obj.h)
                     self._shape = self._shape.__class__(
-                        surface_from_file__gtk(self._filepath, (m,m)))
+                        surface_from_file__gtk(self._filepath, (m, m)))
                     self.convert()
                 else:
-                    self._shape = self._orig_shape.copy()
-        super(GtkGameObject, self).fit(obj)
+                    pass #self._shape = self._orig_shape.copy()
+        super().fit(obj)
 
     def resize (self, width, height, anchor=CENTER):
         """
@@ -165,11 +168,11 @@ class GtkGameObject (GameObject):
                 if self._filepath:
                     m = max(width, height)
                     self._shape = self._shape.__class__(
-                        surface_from_file__gtk(self._filepath, (m,m)))
+                        surface_from_file__gtk(self._filepath, (m, m)))
                     self.convert()
                 else:
-                    self._shape = self._orig_shape.copy()
-        super(GtkGameObject, self).resize(width, height)
+                    pass #self._shape = self._orig_shape.copy()
+        super().resize(width, height)
         self.move_at(fp, anchor)
 
     def resize_perc_from (self, obj, perc, anchor=CENTER):
@@ -196,12 +199,10 @@ class GtkGameObject (GameObject):
         w, h = gameUtils.scale_from_dim(self.w, self.h, length, dim)
         self.resize(w, h, anchor)
 
-    #XXX+TODO
-    def _rotate (self, angle, anchor_at='center'):
+    def _rotate (self, angle, anchor_at='center'): #XXX+TODO
         """
         Rotate the object's surface by *angle* amount. Could be a float value.
         Negative angle amounts will rotate clockwise. *anchor_at* is the rect
         attribute used for anchor the rotated rect (default to 'center').
         """
         raise NotImplementedError
-

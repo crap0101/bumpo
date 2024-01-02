@@ -1,9 +1,6 @@
 
-- aggiungere test per Grid.positions (in realtà usa Table.get già testato)
+src/plugins/__init__.py
+  * module imp deprecated, switch to importlib
 
-baseObjects.Shape
-    - alpha & surface flags
-
-
-- gameObjects.DispatchObj actually not used... think about it.
-
+src/gameObjects
+  * DispatchObj actually not used... think about it.

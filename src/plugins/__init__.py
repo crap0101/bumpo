@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
+
+# This file is part of bumpo and is released under a MIT-like license
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
+# See the file COPYING in the root directory of this package.
 
 """
 Load plugins in bumpo.
 Custom classes to be used instead of baseObjects's GameObject or Shape
 must be derived from them (or subclasses of), or regiter themself
-within the BaseGameObject or BaseShape abstract classes, respectively.
+within the GameObject or Shape abstract classes, respectively. (XXX+TODO not anymore)
 
 Each plugin module can have a module-level variable called "MODULE_PLUGINS"
 as a sequence of plugin's object names (a class, a function or whatever)

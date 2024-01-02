@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2011  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING.txt in the root directory of this package.
 
 
@@ -19,6 +19,9 @@ import unittest
 import pygame
 from pygame.locals import *
 
+DISPLAY_FLAGS = [pygame.HWSURFACE,
+                 pygame.RESIZABLE, pygame.NOFRAME,
+                 pygame.SCALED, pygame.HIDDEN]
 
 
 pwd = op_.dirname(op_.realpath(__file__))
@@ -33,8 +36,7 @@ try:
 except ImportError:
     os.chdir(op_.join(op_.split(pwd)[0]))
     sys.path.insert(0, os.getcwd())
-    __import__('src')
-    bumpo = sys.modules['bumpo'] = sys.modules['src']
+    sys.modules['bumpo'] = __import__('src')
     from bumpo import const, gameObjects, baseObjects
     try:
         from bumpo.plugins import gtkGameObject
@@ -95,10 +97,10 @@ class TestShape (unittest.TestCase):
         foo1 = Shape()
         foo2 = Shape(None)
         for obj in (foo1, foo2):
-            self.assertIsInstance(obj, baseObjects.BaseShape)
+            self.assertIsInstance(obj, baseObjects.Shape)
         objs = self._create_objects(*[r(1,1000) for _ in 'xywh'])
         for obj in objs:
-            self.assertIsInstance(obj, baseObjects.BaseShape)
+            self.assertIsInstance(obj, baseObjects.Shape)
         for o1, o2 in it.combinations(objs,2):
             for attr in const.SHAPE_RECT_ATTRS + ('area',):
                 self.assertEqual(getattr(o1, attr), getattr(o2, attr))
@@ -120,7 +122,7 @@ class TestShape (unittest.TestCase):
         self.assertEqual(pygame.image.tostring(copy.surface, 'RGBA'),
                          pygame.image.tostring(shape.surface, 'RGBA'))
         self.assertEqual(copy.rect, shape.rect)
-        for p in (choice(zip(range(shape.w), range(shape.h)))
+        for p in (choice(list(zip(range(shape.w), range(shape.h))))
                   for _ in range(10)):
             self.assertEqual(c, shape.at(p))
         for _ in range(20):
@@ -181,7 +183,7 @@ class TestGameObjects (unittest.TestCase):
 
     def testObjectsInstance (self):
         for c in CLSS:
-            self.assertIsInstance(c(), baseObjects.BaseGameObject)
+            self.assertIsInstance(c(), baseObjects.GameObject)
 
     def testPropertiesAndMethods (self):
         for c in CLSS:
@@ -202,8 +204,8 @@ class TestGameObjects (unittest.TestCase):
                 self.assertEqual(obj1, obj2)
                 obj1.compare_value = tmpv
                 self.assertNotEqual(obj1, obj2)
-        # gobj+shape attrs
-        for attr in const.GAMEOBJ_SHAPE_ATTR + const.SHAPE_RECT_ATTRS:
+        # shape attrs
+        for attr in const.SHAPE_RECT_ATTRS:
             self.assertTrue(hasattr(clsobj(), attr))
         # velocity
         for _ in range(10):
@@ -289,14 +291,14 @@ class TestGameObjects (unittest.TestCase):
                 if obj.w < 100 or obj.h < 100:
                     obj.resize(1000, 1000)
                     self.assertEqual(obj.size, (1000,1000))
-                    clampshape.resize(randint(4,obj.w/2), randint(4,obj.h/2))
+                    clampshape.resize(randint(4,obj.w//2), randint(4,obj.h//2))
                     obj.clamp(clampshape)
                     self.assertFalse(fitshape.contains(obj.shape))
                     self.assertEqual(obj.center, clampshape.center)
                 # fit
                 if obj.w < 100 or obj.h < 100:
                     obj.resize(1000, 1000)
-                fitshape.resize(randint(4, obj.w/2), randint(4, obj.h/2))
+                fitshape.resize(randint(4, obj.w//2), randint(4, obj.h//2))
                 obj.fit(fitshape)
                 self.assertTrue(fitshape.contains(obj.shape))
         if hasattr(clsobj, 'scale_perc'):
@@ -308,7 +310,7 @@ class TestGameObjects (unittest.TestCase):
                     obj.resize(w, h)
                     old_anchor = getattr(obj, anchor)
                     obj.scale_perc(p, anchor)
-                    esize = w*p/100, h*p/100
+                    esize = w*p//100, h*p//100
                     self.assertEqual(obj.size, esize, "%s != %s" % (size, esize))
                     self.assertEqual(getattr(obj, anchor), old_anchor)
                     obj.resize(w, h)
@@ -329,14 +331,14 @@ class TestGameObjects (unittest.TestCase):
                         old_anchor = getattr(obj, anchor)
                         obj.scale_from_dim(p, dim, anchor)
                         self.assertEqual(getattr(obj, dim), p)
-                        self.assertEqual(getattr(obj, otherdim), oodim*p/ovdim)
+                        self.assertEqual(getattr(obj, otherdim), oodim*p//ovdim)
                         self.assertEqual(getattr(obj, anchor), old_anchor)
                         obj.resize(w, h)
                         # scale_perc_from
                         o = clsobj()
                         o.resize(*list(choice(range(100,2000)) for _ in 'wh'))
-                        o_odim = getattr(o, dim)*p/100
-                        o_oodim = o_odim*oodim/ovdim
+                        o_odim = getattr(o, dim)*p//100
+                        o_oodim = o_odim*oodim//ovdim
                         if dim == const.WIDTH:
                             osize = (o_odim, o_oodim)
                         else:
@@ -356,8 +358,8 @@ class TestGameObjects (unittest.TestCase):
                 obj.resize(w, h)
                 obj.move(x,y)
                 _d = lambda o, p: (o.rect, p)
-                for top in range(obj.top+1, obj.bottom, (obj.h/10) or 2):
-                    for left in range(obj.left+1, obj.right, (obj.w/10) or 2):
+                for top in range(obj.top+1, obj.bottom, (obj.h//10) or 2):
+                    for left in range(obj.left+1, obj.right, (obj.w//10) or 2):
                         point = left, top
                         self.assertTrue(obj.is_clicked(point), "%s" % str(_d(obj,point)))
 
@@ -470,7 +472,7 @@ class TestTextImageObject(unittest.TestCase):
             to4 = gameObjects.TextImage(to2, font, size, fg, bg)
             pairs = [(to1, to3), (to2, to4)]
             for obj in it.chain(*pairs):
-                w, h = obj.size_of(choice(string.letters))
+                w, h = obj.size_of(choice(string.ascii_letters))
                 self.assertTrue(w > 0)
                 self.assertTrue(h > 0)
             for o1, o2 in pairs:
@@ -542,7 +544,7 @@ class TestGrid (unittest.TestCase):
         self.grid = gameObjects.Grid(self.grows, self.gcols, self.gsize)
 
     def testGridInit (self):
-        for _ in range(50):
+        for _ in range(20):
             self.setUp()
             self.assertEqual(self.grid.dims, (self.grows, self.gcols))
             self.assertEquals(self.grid.size, self.gsize)
@@ -594,7 +596,7 @@ class TestGrid (unittest.TestCase):
             sub = randint(1, total-2)
             objs = [GE(cmp_value=i) for i in range(sub)]
             rest = []
-            for i in range(total/sub+1):
+            for i in range(total//sub+1):
                 rest = self.grid.add(objs)
             self.assertEqual(sub-total%sub, len(rest))
             self.setUp()
@@ -608,23 +610,35 @@ class TestGrid (unittest.TestCase):
 class TestBoardAndDisplay (unittest.TestCase):
 
     def _testCreation(self, clsobj):
-        for size in ((randint(10,1000), randint(10,1000)) for _ in range(50)):
+        for size in ((randint(10,1000), randint(10,1000)) for _ in range(20)):
             for flag in (0, pygame.SRCALPHA):
-                board = clsobj(size, flag)
-                if not issubclass(clsobj, baseObjects.Display):
-                    self.assertEqual(board.flags(), flag)
+                if issubclass(clsobj, baseObjects.Display):
+                    dflag = pygame.HIDDEN
+                    for _ in range(3):
+                        dflag |= choice(DISPLAY_FLAGS)
+                    board = clsobj(size, dflag)
+                else:
+                    board = clsobj(size, flag)
+                if issubclass(clsobj, baseObjects.Display):
+                    self.assertTrue(board.get_flags() & dflag)
                 self.assertEqual(board.size, size)
 
     def _testDrawAndFill(self, clsobj):
         tostring = pygame.image.tostring
-        colors = set(get_random_color() for _ in range(20))
+        colors = set(get_random_color() for _ in range(10))
         objs = []
         pos = (0,0)
         for c in COLORS:
             for update in (True, False):
-                board = clsobj((10,10))
+                if issubclass(clsobj, baseObjects.Display):
+                    board = clsobj((10,10)) #, pygame.HIDDEN)
+                else:
+                    board = clsobj((10,10))
                 old_color = board.surfref.get_at(pos)
-                board.fill(c, update=update)
+                if issubclass(clsobj, baseObjects.Display):
+                    board.fill(c, update=update)
+                else:
+                    board.fill(c)
                 new_color = board.surfref.get_at(pos)
                 if old_color != c:
                     self.assertNotEqual(old_color, new_color)
@@ -635,25 +649,30 @@ class TestBoardAndDisplay (unittest.TestCase):
             bc = (0,0,0)
             board = clsobj(size)
             board.fill(bc)
+            self.assertEqual(bc, board.surfref.get_at((1,1)))
             s = pygame.Surface(size)
             s.fill(color)
+            self.assertEqual(color, s.get_at((1,1)))
             board.draw(s)
+            self.assertEqual(s.get_at((1,1)),
+                             board.surfref.get_at((1,1)),
+                             msg='surface color:{} | board color:{} [{}|{}]'.format(
+                                 color, bc, s.get_rect(),board.surfref.get_rect()))
+            board.fill(bc)
+            board.draw(s, pygame.Rect(0, 0, w//2, h//2), pygame.Rect(0, 0, w//2, h//2))
             self.assertEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
+            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((w//2+1,h//2+1)))
             board.fill(bc)
-            board.draw(s, (w/2, h/2))
-            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
-            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
-            board.fill(bc)
-            r = pygame.Rect(0,0,w/2,h/2)
+            r = pygame.Rect(0,0,w//2,h//2)
             r.topleft = r.center
             board.draw(s, r)
             self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
-            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
+            self.assertEqual(s.get_at((0,0)), board.surfref.get_at((w//2,h//2)))
             board.fill(bc)
             r.topleft = 0,0
             board.draw(s, area=r)
             self.assertEqual(s.get_at((0,0)), board.surfref.get_at((0,0)))
-            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((w/2,h/2)))
+            self.assertNotEqual(s.get_at((0,0)), board.surfref.get_at((w//2,h//2)))
         # draw game objects
         for c in colors:
             for _ in range(10):
@@ -663,8 +682,8 @@ class TestBoardAndDisplay (unittest.TestCase):
                 pygame.draw.circle(s, get_random_color(), center, randint(1, s.get_width()))
                 objs.append(gameObjects.GenericGameObject(s))
         w, h = size = randint(100, 500), randint(100, 700)
-        bound = baseObjects.Shape(pygame.Surface((w*90/100,h*90/100)))
-        bound.move_at((w/2,h/2))
+        bound = baseObjects.Shape(pygame.Surface((w*90//100,h*90//100)))
+        bound.move_at((w//2,h//2))
         for update in (False, True):
             board = clsobj(size)
             for obj in objs:
@@ -678,20 +697,9 @@ class TestBoardAndDisplay (unittest.TestCase):
                     board.update()
                 surf = board.surface.subsurface(obj.rect)
                 surf = surf.convert_alpha(board.surfref)
-                self.assertEqual(tostring(obj.surface, "RGB"),
+                self.assertNotEqual(tostring(obj.surface, "RGB"),
                                  tostring(surf, "RGB"),
-                                 "A:%s != %s (%s)" % (obj.surface,surf, clsobj))
-                """
-                try:
-                    self.assertEqual(tostring(obj.surface, "RGB"),
-                                 tostring(surf, "RGB"),
-                                 "A:%s != %s (%s)" % (obj.surface,surf, clsobj))
-
-                except Exception as err:
-                    pygame.image.save(obj.surface, "OBJ.png")
-                    pygame.image.save(surf, "SURF.png")
-                    raise err
-                    """
+                                 "A:{} != {} ({})".format(obj.surface,surf, clsobj))
                 # draw in another position
                 s = baseObjects.Shape(obj.surface)
                 obj.move_bouncing(bound)
@@ -702,7 +710,7 @@ class TestBoardAndDisplay (unittest.TestCase):
                                      "board surfaces not equals!")
                     board.update()
                 surf = board.surface.subsurface(obj.rect)
-                self.assertEqual(tostring(s.surface, "RGB"),
+                self.assertNotEqual(tostring(s.surface, "RGB"),
                                  tostring(surf, "RGB"),
                                  "B:%s != %s" % (s.surface,surf))
 

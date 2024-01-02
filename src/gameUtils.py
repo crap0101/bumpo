@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2010  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING in the root directory of this package.
 
 
-"""This module contains some functions and classes utilities related to the games."""
+"""
+This module contains some functions and classes utilities related to the games.
+"""
 
 
 # std imports
@@ -13,10 +15,12 @@ import math
 import random
 import itertools as it
 # local imports
-from const import HEIGHT, WIDTH
+from bumpo.const import HEIGHT, WIDTH
 # external imports
 import pygame
 
+class CopyValue:
+    pass
 
 #############
 # FUNCTIONS #
@@ -33,27 +37,35 @@ def convert (surface, obj=None, alpha=True):
     """
     Change the surface pixel format in conformity with the obj argument.
     If no arguments are passed the new pixel format is the same as the
-    pygame's display Surface. obj can be either a Shape or GameObject
-    object.
-    If alpha is a boolean true value (default: True), the shape will be in
-    a format suited for quick blitting to the given format with per pixel
-    alpha. Unlike converting without aplha, the pixel format for the new
-    Shape will not be exactly the same as the requested source, but it
-    will be optimized for fast alpha blitting.
-    If obj is given and alpha is not True, the surface transparency value
-    will be get from obj.
-    If no surface is given, the new surface will be optimized for blitting
+    pygame's display Surface. obj can be either a Shape or a GameObject.
+    alpha is a boolean value, if true (the default), the shape will be in
+    a format suited for quick blitting to the given format with per pixel alpha
+    and the alpha value is copied from obj (if not None, otherwise use the
+    surface one).
+    If no obj is given or None, the new surface will be optimized for blitting
     to the current display. 
     """
-    conv = getattr(surface, ('convert', 'convert_alpha')[alpha])
-    surf = conv(obj) if obj is not None else conv()
-    if obj is not None and not alpha:
-        surf.set_alpha(obj.get_alpha())
+    if obj is not None:
+        if alpha:
+            surf = surface.convert_alpha(obj.surfref)
+            surf.set_alpha(obj.alpha)
+        else:
+            surf = surface.convert(obj.surfref)
+            surf.set_alpha(obj.alpha)
+    else:
+        if alpha:
+            surf = surface.convert_alpha()
+            surf.set_alpha(surface.get_alpha())
+        else:
+            surf = surface.convert()
+            surf.set_alpha(surface.get_alpha())
     return surf
+
 
 def edistance (seq1, seq2):
     """Returns the Euclidean distance between *seq1* and *seq2*."""
-    return sum((c1-c2)**2 for c1,c2 in zip(seq1, seq2))**.5
+    return sum((c1 - c2) ** 2 for c1, c2 in zip(seq1, seq2)) ** .5
+
 
 def pygame_display_size ():
     """Return (w,h) size, the width and height of the current video mode,
@@ -71,17 +83,17 @@ def finddiv (n):
     n should be >= 0, if not, returns the pair (1,1).
     """
     if n <= 0:
-        return 1,1
-    c = int(math.ceil(n**.5))
-    d, m = divmod(n,c)
-    return c, d+(1 if m else 0)
+        return (1, 1)
+    c = int(math.ceil(n ** .5))
+    d, m = divmod(n, c)
+    return c, d + (1 if m else 0)
 
 
 def relative_point (p1, p2, size):
     w1, h1 = p1
     w2, h2 = p2
     w, h = size
-    return w1 * w / w2, h1 * h / h2
+    return w1 * w // w2, h1 * h // h2
 
 
 def surface_from_file (filepath, convert='alpha'):
@@ -99,7 +111,7 @@ def surface_from_file (filepath, convert='alpha'):
         elif convert == 'alpha':
             conv = getattr(surf, 'convert_alpha')
         else:
-            raise ValueError("unknown conversion type <%s>" % str(convert))
+            raise ValueError("unknown conversion type <{}>".format(convert))
     else:
         conv = lambda i:i
     return conv(surf)
@@ -111,7 +123,9 @@ def surface_resize (surface, width, height):
     *width* and *height* must be >= 0, otherwise raise TypeError.
     """
     if width < 0 or height < 0:
-        raise ValueError("(%d, %d), width and height must be two positive integer" % (width, height))
+        raise ValueError(
+            "({}, {}), width and height must be two positive integer".format(
+                width, height))
     try:
         return pygame.transform.smoothscale(surface, (width, height))
     except ValueError:
@@ -124,18 +138,18 @@ def scale_perc (w, h, perc):
     """
     if w < 0 or h < 0 or perc < 0:
         raise ValueError("width, height and perc must be >= 0")
-    return w*perc/100, h*perc/100
+    return w * perc // 100, h * perc // 100
 
 
 def scale_perc_from (w, h, perc, dim=HEIGHT):
     """Scale (w,h) size at the perc size of dimension *dim*.
     Raise ValueError for invalid *dim* arg (default HEIGHT)."""
     if dim == HEIGHT:
-        length = h*perc/100
+        length = h * perc // 100
     elif dim == WIDTH:
-        length = w*perc/100
+        length = w * perc // 100
     else:
-        raise ValueError("Unknown dim '%s'" % dim)
+        raise ValueError("Unknown dim <{}>".format(dim))
     return scale_from_dim(w, h, length, dim)
 
 
@@ -143,18 +157,18 @@ def scale_from_dim (w, h, length, dim=HEIGHT):
     """Returns the new (w,h) size scaling by the dim-relative length.
     Raise ValueError for invalid *dim* arg (default HEIGHT)."""
     if dim == HEIGHT:
-        return w*length/h, length
+        return w * length // h, length
     elif dim == WIDTH:
-        return length, h*length/w
+        return length, h * length // w
     else:
-        raise ValueError("Unknown dim '%s'" % dim)
+        raise ValueError("Unknown dim <{}>".format(dim))
 
 
 ###########
 # CLASSES #
 ###########
 
-class FakeSound (object): #XXX+TODO: maybe useless. Wraps Channels and Sound object in another one?
+class FakeSound: #XXX+TODO: maybe useless. Wraps Channels and Sound object in another one?
     """A class for creating sound object that (partially) mimic the
     behaviour of pygame.mixer.Sound object (but using pygame.mixer.music).
     """
@@ -181,7 +195,7 @@ class FakeSound (object): #XXX+TODO: maybe useless. Wraps Channels and Sound obj
             self.channel = None
 
 
-class EmptyObject (object):
+class EmptyObject:
     """Table default empty object."""
     def __eq__ (self, other):
         return self.__class__.__name__ == other
@@ -190,7 +204,7 @@ class EmptyObject (object):
     def __str__ (self):
         return ''
 
-class Table (object):
+class Table:
     def __init__ (self, rows, columns, empty=EmptyObject(), seq=()):
         """
         Create a Table of *row* x *columns* size.
@@ -199,13 +213,13 @@ class Table (object):
         populated with it's items (missing positions are filled
         using *empty*).
         """
-        super(Table, self).__init__()
         self._row = rows
         self._col = columns
         self._empty = empty
         self._grid = dict(
             it.takewhile(lambda args: args[0] != empty,
-                         it.izip_longest(self.iter_pos(), seq, fillvalue=empty)))
+                         it.zip_longest(
+                             self.iter_pos(), seq, fillvalue=empty)))
 
     def __contains__ (self, item):
         return item in self._grid.values()
@@ -237,7 +251,8 @@ class Table (object):
         return len(self._grid)
 
     def __str__ (self):
-        return "Table object (%d, %d) at %s" % (self._row, self._col, hex(id(self)))
+        return "Table object ({}, {}) at {}".format(
+            self._row, self._col, hex(id(self)))
 
     @property
     def empty (self):
@@ -336,11 +351,11 @@ class Table (object):
             values.append(self[pos])
         return values
 
-    def pprint (self, format=None):
-        """Pretty print row-by-row using *format* or the default one."""
-        format = format or "%s " * self._col
+    def pprint (self, fmt=None):
+        """Pretty print row-by-row using *fmt* or the default one."""
+        fmt = fmt or "{} " * self._col
         for row in self.rows:
-            print format % tuple(row)            
+            print(fmt.format(tuple(row)))
 
     def reflected_h (self):
         """Returns a (horizontal) reflected _copy_ of the table."""

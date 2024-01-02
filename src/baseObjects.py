@@ -1,43 +1,32 @@
 # -*- coding: utf-8 -*-
 
 # This file is part of bumpo and is released under a MIT-like license
-# Copyright (c) 2010  Marco Chieppa (aka crap0101)
+# Copyright (c) 2010-2024  Marco Chieppa (aka crap0101)
 # See the file COPYING in the root directory of this package.
 
 
 # std imports
-from abc import ABCMeta
-from collections import defaultdict, namedtuple, Sequence, MutableSequence
+from collections import defaultdict, namedtuple
+try:
+    from collections import Sequence, MutableSequence
+except ImportError:
+    from collections.abc import Sequence, MutableSequence
 from functools import reduce
 import operator
 import random
+import types
 # local imports
-import gameUtils
-from const import SHAPE_RECT_ATTRS, GAMEOBJ_SHAPE_ATTR, CENTER, TOPLEFT
+from bumpo import gameUtils
+from bumpo.const import SHAPE_RECT_ATTRS, CENTER, TOPLEFT
 # external imports
 import pygame
 
-
-GO_SHAPE_ATTRS = frozenset(SHAPE_RECT_ATTRS + GAMEOBJ_SHAPE_ATTR)
-
 Velocity = namedtuple('Velocity', 'x y')
-
-"""
-NOTE: custom shape and game objects *must* register themself respectively
-within the abstract classes BaseShape and BaseGameObject, or inherit from
-a registered class.
-"""
-
-class BaseShape:
-    __metaclass__ = ABCMeta
-
-class BaseGameObject:
-    __metaclass__ = ABCMeta
-
 
 class ShapeMeta (type):
     """
-    Shape metaclass used for set some attributes and....TODO.
+    Shape metaclass used for set SHAPE_RECT_ATTRS attributes
+    of the underlying pygame.Rect to the Shape instances.
     """
     def __new__(mcs, name, bases, dict):
         def _get_attr (attr):
@@ -52,8 +41,7 @@ class ShapeMeta (type):
             dict[attr] = property(_get_attr(attr), _set_attr(attr))
         return type.__new__(mcs, name, bases, dict)
 
-class Shape (object):
-    __metaclass__ = ShapeMeta
+class Shape (metaclass=ShapeMeta):
     def __init__ (self, obj=None):
         """
         Create a new Shape instance from obj.
@@ -61,46 +49,69 @@ class Shape (object):
         or None (in the latter case a zero-sized shape is created).
         Raise TypeError for a non conforming object obj.
         """
+        self._alpha_flag = 0
         if obj is None:
             self._surface = pygame.Surface((0,0))
             self._rect = self._surface.get_rect()
-        elif isinstance(obj, BaseShape):
-            self._surface = obj.surface
-            self._rect = obj.rect
-            self.alpha = obj.alpha
-        elif isinstance(obj, pygame.Surface):
-            self._surface = obj.copy()
-            self._rect = self._surface.get_rect()
-            self.alpha = obj.get_alpha()
+             # force alpha to be 0 instead of None for non sets alpha values.
+            self.alpha = self._surface.get_alpha() or 0
         elif isinstance(obj, pygame.Rect):
             self._rect = pygame.Rect(obj)
-            self._surface = pygame.Surface(self._rect.size)
+            self._surface = pygame.Surface(obj.size)
+            self.alpha = 0
+        elif isinstance(obj, pygame.Surface):
+            self._surface = obj.copy()
+            self._rect = obj.get_rect()
+            self.alpha = obj.get_alpha() or 0
+        elif isinstance(obj, Shape):
+            self._surface = obj.surface
+            self._rect = obj.rect
+            self.alpha = obj.alpha or 0
+            self._alpha_flag = obj.get_alpha_flag()
         else:
-            raise TypeError("Can't initialize a Shape object from %s" % obj)
-        #self.convert()
+            raise TypeError("Can't initialize a Shape object from <{}>".format(obj))
+        self.convert()
 
     @property
     def alpha (self):
         """
-        Return the current alpha value for this Shape.
+        Returns the surface alpha value for this Shape.
         If the alpha value is not set then None is returned.
         """
         return self._surface.get_alpha()
     @alpha.setter
     def alpha (self, a):
         """
-        Set the current alpha value for this Shape.
+        Sets the surface alpha value for this Shape.
         The alpha value must be an integer from 0 to 255,
         0 is fully transparent and 255 is fully opaque.
         If None is passed for the alpha value, then the alpha will be disabled.
         """
         self._surface.set_alpha(a)
 
+    def get_alpha_flag (self):
+        """
+        Return the current alpha flag for this Shape.
+        """
+        return self._alpha_flag
+
+    def set_alpha_flag(self, alpha_flag):
+        """
+        Sets the alpha flag for this surface (must be 0 or pygame.RLEACCEL).
+        """
+        if alpha_flag not in (0, pygame.RLEACCEL):
+            raise ValueError("Wrong value for alpha flag: {}".format(alpha_flag))
+        self._alpha_flag = alpha_flag
+        self._surface.set_alpha(self.alpha, alpha_flag)
+        
     @property
     def area (self):
         """Returns the Shape's area."""
         return self.w * self.h
 
+    def get_flags(self):
+        return self._surface.get_flags()
+    
     def at (self, point):
         """
         Returns a copy of the RGBA Color value at the given (x,y) point.
@@ -109,16 +120,11 @@ class Shape (object):
         """
         return self._surface.get_at(point)
 
-    def _at (self, point, color=None): # XXX+TODO: use this?
+    def set_at (self, point, color=None):
         """
-        Returns a copy of the RGBA Color value at the given (x,y) point.
-        If color is not None, set the RGBA or mapped integer color value for
-        the given pixel. If the pixel position is outside the area of the Shape
-        an IndexError exception will be raised.
+        Sets the $color at $point.
         """
-        if color is None:
-            self._surface.set_at(point, color)
-        return self._surface.get_at(point)
+        self._surface.set_at(point, color)
 
     @property
     def rect (self):
@@ -128,35 +134,33 @@ class Shape (object):
     @property
     def surface (self):
         """Returns a copy of the Shape's surface."""
-        surf = self._surface.copy()
-        surf.set_alpha(self.alpha)
-        return surf
+        return self._surface.copy()
 
     @property
     def surfref (self):
         """Returns a reference of the Shape's surface."""
         return self._surface
 
-    def clamp (self, shape):
+    def clamp (self, obj):
         """
-        Moves this Shape to be completely inside the argument shape.
+        Moves this Shape to be completely inside obj.
         If it is large to fit inside, it is centered inside the argument shape,
         but its size is not changed.
         """
-        self._rect.clamp_ip(shape.rect)
+        self._rect.clamp_ip(obj.rect)
 
-    def contains (self, shape):
+    def contains (self, obj):
         """
         Return True if the argument shape is completely inside this Shape.
         """
-        return bool(self._rect.contains(shape.rect))
+        return bool(self._rect.contains(obj.rect))
 
-    def collide (self, shape):
+    def collide (self, obj):
         """
         Returns True if any portion of either shape overlap
         (except the top+bottom or left+right edges). 
         """
-        return bool(self._rect.colliderect(shape.rect))
+        return bool(self._rect.colliderect(obj.rect))
 
     def collidepoint (self, point):
         """
@@ -165,42 +169,45 @@ class Shape (object):
         """
         return bool(self._rect.collidepoint(point))
 
-    def convert (self, obj=None, alpha=True):
+    def convert (self, reference_obj=None, alpha=True):
         """See gameUtils.convert."""
-        if obj is not None:
-            if isinstance(obj, BaseShape):
-                obj = obj.surfref
-            elif not isinstance(obj, pygame.Surface):
+        if reference_obj is not None:
+            if isinstance(reference_obj, Shape):
+                pass
+            elif isinstance(reference_obj, pygame.Surface):
+                reference_obj = Shape(reference_obj)
+            else:
                 raise TypeError(
-                    "'obj' must be BaseShape, BaseGameObject or pygame.Surface")
-        self._surface = gameUtils.convert(self._surface, obj, alpha)
+                    "'obj' must be Shape, GameObject or pygame.Surface")
+        self._surface = gameUtils.convert(self.surfref, reference_obj, alpha)
+        self.alpha = self._surface.get_alpha()
 
     def copy (self):
-        """Returns a new shape from this Shape, copying its surface,
-        rect and position.
+        """Returns a new shape from this Shape,
+        copying its surface, rect and position.
         """
-        s = self.__class__(self.surfref)
-        s.alpha = self.alpha
-        s.move_at(self._rect.topleft, TOPLEFT)
-        return s
+        return Shape(self)
 
-    def fit (self, shape):
+    def fill (self, color):
+        """Fill the Shape surface with a solid $color
+        (anything accepted by pygame.Surface.fill)."""
+        self._surface.fill(color)
+
+    def fit (self, obj):
         """
         Move and resize this Shape to fit the argument shape.
         The aspect ratio of the Shape is preserved, so the new size
         may be smaller than the target in either width or height.
         Raise TypeError for invalid objects.
         """
-        if isinstance(shape, (BaseShape,BaseGameObject)):
-            rect = shape.rect
-        elif isinstance(shape, pygame.Rect):
-            rect = shape
+        if isinstance(obj, (Shape, pygame.Surface)):
+            rect = obj.rect
+        elif isinstance(obj, pygame.Rect):
+            rect = obj
         else:
-            raise TypeError("Unknown object type: %s" % type(shape))
+            raise TypeError("Unknown object type: <{}>".format(type(obj)))
         self._rect = self._rect.fit(rect)
         self._surface = gameUtils.surface_resize(self._surface, self.w, self.h)
-        # XXX+TODO: ulteriori metodi? tipo:
-        # blit, fill, subsurface (in ogni caso una copia), get_buffer (... decidere) 
 
     def move (self, x, y):
         """Move the Shape by the given offset."""
@@ -220,33 +227,44 @@ class Shape (object):
         w and h must be positive integer, otherwise raise ValueError.
         """
         self._surface = gameUtils.surface_resize(self._surface, w, h)
-        self._rect.size = w,h
+        self._rect.size = w, h
 
-    def _rotate (self, angle, anchor_at='center'): #XXX+TODO
+    def rotate (self, angle, anchor_at='center'): #XXX+TODO
         raise NotImplementedError
 
-# reg Shape
-BaseShape.register(Shape)
+    def set_surface(self, surf):
+        """Set the $surf Surface as the object surface. """
+        center = self._rect.center
+        self._surface = surf.copy()
+        self._rect = self._surface.get_rect()
+        self.alpha = surf.get_alpha()
+        self._rect.center = center
+        
 
-class GameObject (object):
+class GameObject(Shape):
     def __init__ (self, obj=None, cmp_value=None):
         """
         Create a new GameObject instance, optionally from an existing
         object obj, which can be a pygame.Surface, a Shape compatible
-        object or None (the default). Raise TypeError otherwise.
+        object, another GameObject or None (the default).
+        Raise TypeError otherwise.
         cmp_value should be a special value which will be used in
-        object's comparison, or None (the default: means id(self)).
+        object's comparison, or None.
+        cmp_value is None by default, which set it to id(self) unless
+        obj is itself a GameObject, in which case its cmp_value is used
+        (as its velocity). In such a case, to set cmp_value to id(self)
+        pass a CopyValue instance instead of None.
         """
-        if obj is None:
-            self._shape = Shape()
-        elif isinstance(obj, pygame.Surface):
-            self._shape = Shape(obj)
-        elif isinstance(obj, BaseShape):
-            self._shape = obj.copy()
-        else:
-            raise TypeError("Can't create an instance from %s" % obj)
         self._cmp_value = id(self) if cmp_value is None else cmp_value
         self._velocity = Velocity(0,0)
+        super().__init__(obj)
+        if isinstance(obj, GameObject):
+            self._velocity = obj.velocity
+            if ((not cmp_value)
+            and (not isinstance(cmp_value, gameUtils.CopyValue))):
+                self._cmp_value = id(self)
+        elif not isinstance(obj, (pygame.Surface, Shape, types.NoneType)):
+            raise TypeError("Can't create an instance from <{}>".format(obj))
         self._action_groups = defaultdict(list)
 
     @property
@@ -261,7 +279,7 @@ class GameObject (object):
     @property
     def shape (self):
         """Returns a copy of the object's shape."""
-        return self._shape.copy()
+        return Shape(self)
 
     @property
     def velocity (self):
@@ -274,69 +292,25 @@ class GameObject (object):
         return self._cmp_value == other
 
     def __ne__ (self, other):
-        return not self == other
-
-    def __getattr__ (self, attr):
-        """Get some attributes from the object's shape."""
-        if attr in GO_SHAPE_ATTRS:
-            return getattr(self._shape, attr)
-        else:
-            raise AttributeError("%s object has no attribute %s"
-                                 % (self.__class__.__name__, attr))
-
-    def __setattr__ (self, attr, value):
-        """Set some attributes to the object's shape."""
-        if attr in GO_SHAPE_ATTRS:
-            return setattr(self._shape, attr, value)
-        else:
-            return super(GameObject, self).__setattr__(attr, value)
-
-    def _clamp (self, obj):
-        """
-        Clamp this object into obj (a pygame.Rect, a Shape or GameObject
-        compatible object) or raise TypeError.
-        """
-        if isinstance(obj, pygame.Rect):
-            self._shape.clamp(Shape(obj))
-        elif isinstance(obj, BaseShape):
-            self._shape.clamp(obj)
-        elif isinstance(obj, BaseGameObject):
-            self._shape.clamp(obj.shape)
-        else:
-            raise TypeError("Unsupported object to clamp in: %s" % obj)
+        return not (self == other)
 
     def clamp (self, obj):
         """
-        Clamp this object into obj (a pygame.Rect, a Shape or GameObject
-        compatible object) or raise TypeError.
+        Clamps this object into obj (a pygame.Rect, a pygame.Surface,
+        a Shape or derived object) or raise TypeError.
         """
-        self._clamp(obj)
+        if isinstance(obj, pygame.Rect):
+            super().clamp(Shape(obj))
+        elif isinstance(obj, pygame.Surface):
+            super().clamp(Shape(obj.get_rect()))
+        elif isinstance(obj, Shape):
+            super().clamp(obj)
+        else:
+            raise TypeError("Unsupported object to clamp in: <{}>".format(obj))
 
-    def convert (self, obj=None, alpha=True):
-        """See gameUtils.convert."""
-        if obj is not None:
-            if isinstance(obj, (BaseShape, GameObject)):
-                obj = obj.surfref
-            elif not isinstance(obj, pygame.Surface):
-                raise TypeError(
-                    "'obj' must be BaseShape, BaseGameObject or pygame.Surface")
-        self._shape.convert(obj, alpha)
-
-    def copy (self): #XXX+TODO: allow copy?
-        """Returns a copy of this object copying its shape and velocity."""
-        new = self.__class__(self._shape, self._cmp_value)
-        new.velocity = self.velocity
-        return new
-
-    def fit (self, obj):
-        """
-        Move and resize this object to fit obj, which can be either a Shape
-        or a GameObject. The aspect ratio of the object is preserved, so the
-        new size may be smaller than the target in either width or height.
-        """
-        if isinstance(obj, BaseGameObject):
-            obj = obj.shape
-        self._shape.fit(obj)
+    def copy (self):
+        """Returns a copy of this object."""
+        return GameObject(self, self._cmp_value)
 
     def is_clicked (self, point=None):
         """
@@ -349,9 +323,12 @@ class GameObject (object):
     def move_bouncing (self, obj, velocity=None):
         """
         Move the object bouncing inside *obj* (either a pygame.Rect, a
-        GameObject or Shape object) by velocity, a pair of integer values,
-        or None (in the latter case, the object's own velocity is used).
+        pygame.Surface, a GameObject or a Shape object) by velocity,
+        a pair of integer values, or None (in the latter case, the
+        object's own velocity is used).
         """
+        if isinstance(obj, pygame.Surface):
+            obj = obj.get_rect()
         x, y = velocity if velocity is not None else self.velocity
         vx, vy = x, y
         if (self.left + x <= obj.left or self.right + x >= obj.right):
@@ -359,8 +336,8 @@ class GameObject (object):
         if (self.bottom + y >= obj.bottom or self.top + y <= obj.top):
             vy = -y
         self.move(x, y)
-        self.velocity = (vx,vy)
-        self._clamp(obj)
+        self.velocity = (vx, vy)
+        self.clamp(obj)
 
     def move_random (self, obj=None, xbound=None, ybound=None):
         """
@@ -368,7 +345,7 @@ class GameObject (object):
         xbound and ybound are a pair of integer representing the
         range in which choose the random value for each coordinate movement,
         or None (in the latter case, the object's velocity attr will be used).
-        obj is an optional object (GameObject or Shape like)
+        obj is an optional object (pygame.Rect, pygame.Surface, GameObject or Shape)
         used as bounding box, otherwise the object is free to move along
         the plane without limits (even negative ones).
         """
@@ -378,13 +355,9 @@ class GameObject (object):
             ybound = (0, self.velocity.y)
         self.move(random.randint(*xbound), random.randint(*ybound))
         if obj is not None:
-            self._clamp(obj)
+            self.clamp(obj)
 
-    def resize (self, w, h):
-        """Resizes to a new (w,h) size."""
-        self._shape.resize(w, h)
-
-    def _rotate (self, angle, anchor_at='center'): #XXX+TODO
+    def rotate (self, angle, anchor_at=CENTER): #XXX+TODO
         raise NotImplementedError
 
     def raise_actions (self, group=None):
@@ -408,14 +381,11 @@ class GameObject (object):
 
     def set_action (self, callable, args=None, kwords=None, group=None):
         """Set a new action which will be executed by the raise_actions method.
-        Args:
-          callable -> a callable object
-          args     -> sequence of positional argument for the callable (optional)
-          kwords   -> dict of keyword arguments for the callable (optional)
-          group    -> name of the action-group this action belongs (optional)
-
+          callable => callable object
+          args     => seq of positional argument for the callable (optional)
+          kwords   => dict of keyword arguments for the callable (optional)
+          group    => name of the action-group this action belongs (optional)
         """
-
         self._action_groups[group].append((callable, args or (), kwords or {}))
 
     def del_action_group (self, group):
@@ -425,18 +395,16 @@ class GameObject (object):
         """
         return self._action_groups.pop(group, None)
 
-# reg GameObject
-BaseGameObject.register(GameObject)
 
 
 class ImageInstanceError (Exception):
     pass
 
-class Image (type):
+class Image (type): # <-- XXX+TODO: don't remember this... thing, actually.
     _classes = []
     def __new__ (cls, args=None, kwords=None, othercls=None, error=False):
         """
-        Returns a new instance of the first succerfully ... TODO
+        Returns a new instance of the first succerfully ... XXX+TODO: write a sensible docstring
         othercls, if present, can be an already registered class (which is
         tried first) or a non registered class (same, note that this 'external'
         class will be not registered).
@@ -464,10 +432,9 @@ class Image (type):
                 return inst
             except Exception as e:
                 errors.append(e)
-                #print "fail with %s ... try next" % c
         else:
-            raise ImageInstanceError("Can't create instance! error(s): %s"
-                            % ' *** '.join(map(str,errors)))
+            raise ImageInstanceError("Can't create instance! error(s): {}".format(
+                ' *** '.join(map(str,errors))))
 
     @classmethod
     def classes (cls):
@@ -482,11 +449,11 @@ class Image (type):
     @classmethod
     def register(cls, othercls, pos=None):
         """
-        Register the class othercls to be used for the instantiation of
-        the new  objects.
+        Register the class othercls to be used for the instantiation
+        of the new  objects.
         The optional argument pos is the (integer) index of the internal
-        register list, a class in a lower index is tried first, that is
-        it get high precedence.
+        register list: a class in a lower index gets high precedence
+        and is tried first.
         """
         if othercls not in cls._classes:
             if pos is None:
@@ -494,196 +461,156 @@ class Image (type):
             cls._classes.insert(pos, othercls)
 
 
-class Board (object):
+def draw_method (self, obj, dest=None, area=None, update=True):
+    """A draw method for Board and Display.
+    Blits obj on self; dest are topleft coordinates or None (in
+    this case use the obj one; area is the smallest portion
+    to blit (from the topleft corner anyway)."""
+    if isinstance(obj, pygame.Surface):
+        surf = obj
+        if dest is None:
+            dest = obj.get_rect()
+        if area is None:
+            area = obj.get_rect()
+    elif isinstance(obj, Shape):
+        surf = obj.surfref
+        if dest is None:
+            dest = obj.rect
+        if area is None:
+            area = obj.rect
+            area.topleft = (0,0) #XXX+TODO: NOTE: area doesn't work if the rect is not at topleft
+    else:
+        raise TypeError("Unknown object <{}>".format(obj))
+    self._surface.blit(surf, dest, area)
+    if update:
+        self.update(dest)
+
+
+class Board(Shape):
+    """A Shape with a draw() method to blit on its Surface."""
+    def __init__(self, size, flags=0):
+        super().__init__(pygame.Surface(size, flags))
+
+    draw = draw_method
+
+    def update(self, *a, **k):
+        NotImplemented
+
+class Display:
+    """
+    A sort of specialized Board class, wrapping
+    the pygame's display, so it's a singleton class.
+    """
+    _inst = None
+    def __new__ (cls, size=(0,0), flags=0):
+        if cls._inst is None:
+            cls._inst = super().__new__(cls)
+            return cls._inst
+        else:
+            if flags:
+                cls._inst.set_flags(flags)
+            if tuple(cls._inst.size) != tuple(size):
+                cls._inst.resize(*size)
+            return cls._inst
+
     def __init__ (self, size=(0,0), flags=0):
         """
-        Create a new Board object with size `size`.
-        The flags argument is a bitmask of additional features for
-        the surface, as in pygame.Surface().
+        Create a display object or returns the existing one.
+        The flags argument have the same meaning of the flag argument in
+        the pygame.display.set_mode function.
         """
-        self._surface = pygame.Surface(size, flags)
+        if not pygame.display.get_init():
+            pygame.display.init()
+        self._surface = pygame.display.set_mode(size, flags)
+        self._default_size = size
+        self._default_flags = flags
+        self._fullscreen_size = gameUtils.pygame_display_size()
+        self._fullscreen_flags = flags | pygame.FULLSCREEN
 
     @property
     def size (self):
-        """Returns the size of the board."""
+        """Returns the Display size."""
         return self._surface.get_size()
-
+    
     @property
     def surface (self):
-        """Returns a copy of the board's surface."""
+        """Returns a copy of the Display surface."""
         return self._surface.copy()
 
     @property
     def surfref (self):
-        """Returns a reference of the board's surface."""
+        """Returns a reference of the Display surface."""
         return self._surface
 
-    def convert (self, obj=None, alpha=True):
-        """See gameUtils.convert."""
-        if obj is not None:
-            if isinstance(obj, (BaseShape,BaseGameObject)):
-                obj = obj.surfref
-            elif not isinstance(obj, pygame.Surface):
-                raise TypeError(
-                    "'obj' must be BaseShape, BaseGameObject or pygame.Surface")
-        self._surface = gameUtils.convert(self._surface, obj, alpha)
-
-    def draw (self, obj, dest=None, area=None, update=True):
-        """
-        Draw obj on this board, positioned with the dest argument
-        (default: None, i.e. use the obj own position). dest can
-        be either a pygame.Rect like object or a pair of coordinates
-        representing the top-left corner of obj.
-        An optional area can be passed as well. This represents a
-        smaller portion of the source surface to draw.
-        If update is a true value (the default) update the screen.
-
-        obj => a Board, Shape, GameObject or pygame.Surface object
-        dest => a pygame.Rect object, a tuple of (x, y) coordinates or None
-        area => a pygame.Rect object or None
-        update => bool value (default True)
-        """
-        if isinstance(obj, pygame.Surface):
-            obj = Shape(obj)
-        if dest is None:
-            dest = obj.rect
-        elif isinstance(dest, (Sequence, MutableSequence)):
-            r = obj.rect
-            r.topleft = dest
-            dest = r
-        if area is None:
-            self._surface.blit(obj.surfref, dest)
-        else:
-            self._surface.blit(obj.surfref, dest, area)
-        if update:
-            self.update(dest)
-
+    draw = draw_method
+        
     def fill (self, color, update=True):
         """
-        Fill this board with color (anything like a pygame.Color).
+        Fill the Display with color (anything like a pygame.Color).
         If update is a true value (the default) update the board.
         """
         self._surface.fill(color)
         if update:
             self.update()
-
-    def flags (self, *args):
-        """
-        Called without arguments, returns the Board's surface flag value,
-        otherwise set the surface flag, produced applying the bitwise OR
-        operator on *args, then update the board.
-        (Note: much of the job is performed by the set_flags method).
-        """
-        if not args:
-            return self._surface.get_flags()
-        else:
-            self.set_flags(reduce(operator.ior, args))
-
-    def resize (self, w, h, update=True):
-        """
-        Resize this board at the new width and height.
-        If update is a true value (the default) update the board.
-        """
-        flags = self.flags()
-        surf = self.surface
-        self._surface = pygame.Surface((w,h), flags)
-        self._surface.blit(gameUtils.surface_resize(surf, w, h), (0,0))
-        if update:
-            self.update()
-
-    def set_flags (self, flags, update=True):
-        """
-        Set the board's surface flags to `flags` (an integer value).
-        If update is a true value (the default) update the board.
-        """
-        surf = self.surface
-        self._surface = pygame.Surface(surf.get_size(), flags)
-        self._surface.blit(surf, (0,0))
-        if update:
-            self.update()
-
-    def update (self, portions=None):
-        """Not implemented."""
-        pass
-
-
-class Display (Board):
-    """
-    Since it is basically a specialized Board class wrapping
-    the pygame's display, it's a singleton class.
-    """
-    _inst = None
-    def __new__ (cls, size=(0,0), flags=0):
-        if cls._inst is None:
-            cls._inst = super(Display, cls).__new__(cls, size, flags)
-        else:
-            if cls._inst.flags() != flags:
-                cls._inst.set_flags(flags)
-            if cls._inst.size != tuple(size):
-                cls._inst.resize(*size)
-        return cls._inst
-
-    def __init__ (self, size=(0,0), flags=0):
-        """
-        Create a display object or returns the existing one.
-        The flag argument have the same meaning of the flag argument in
-        the pygame.display.set_mode function.
-        """
-        if not pygame.display.get_init():
-            pygame.display.init()
-        fs_size = gameUtils.pygame_display_size()
-        self._surface = pygame.display.set_mode(size, flags)
-        self._default_size_and_mode = type(
-            'DefSizeMode', (), {'size':size, 'flags':flags})
-        self._fullscreen_size_and_mode = type(
-            'FullScrrenSizeMode', (), {'size':fs_size, 'flags':pygame.FULLSCREEN})
-
+            
     def resize (self, w, h, update=True):
         """
         Resize the display at the new width and height.
         If update is a true value (the default) update the display.
         """
-        flags = self.flags()
-        s = Shape(self._surface)
-        s.resize(w,h)
-        self._surface = pygame.display.set_mode((w,h), flags)
-        self._default_size_and_mode.size = (w,h)
+        s = Shape(self.surfref)
+        flags = s.get_flags()
+        s.resize(w, h)
+        self._surface = pygame.display.set_mode((w, h), self._default_flags)
+        self._default_size = (w, h)
         self.draw(s)
-        if update:
-            self.update()
+
+    def get_flags (self):
+        """
+        Get the display flags.
+        """
+        return self._default_flags
 
     def set_flags (self, flags, update=True):
         """
-        Set the board's surface flags to `flags` (an integer value).
+        Set the display flags to `flags` (an integer value).
         If update is a true value (the default) update the display.
         """
-        surf = self.surface
-        self._surface = pygame.display.set_mode(surf.get_size(), flags)
-        self._surface.blit(surf, (0,0))
-        self._default_size_and_mode.flags = flags
+        s = Shape(self.surfref)
+        self._surface = pygame.display.set_mode(self._default_size, flags)
+        self.draw(s.surfref)
+        self._default_flags = flags
         if update:
             self.update()
 
+    def set_caption(self, string):
+        pygame.display.set_caption(string)
+        
     def toggle_fullscreen (self):
-        if self._surface.get_flags() & pygame.FULLSCREEN:
+        #XXX: why not used directly: pygame.display.toggle_fullscreen()
+        # uhm... there was a good reason... don't remember which :D
+        if self.get_display_flags() & pygame.FULLSCREEN:
             self._surface = pygame.display.set_mode(
-                self._default_size_and_mode.size,
-                self._default_size_and_mode.flags)
+                self._default_size,
+                self._default_flags)
         else:
+            '''if self._default_size != self._fullscreen_size:
+                s = Shape(self.surfref)
+                s.resize(self._fullscreen_size)'''
             self._surface = pygame.display.set_mode(
-                self._fullscreen_size_and_mode.size,
-                self._fullscreen_size_and_mode.flags)
+                self._fullscreen_size,
+                self._fullscreen_flags)
+        self.update()
 
     def update (self, portions=None):
         """
         Update the display.
         portions can be a single pygame's rect-style object or
-        a sequence of them, this allows to update only a portion
-        of the screen, otherwise if no argument is passed (or portions is None)
+        a sequence of them, this allows to update only a portion of
+        the screen, otherwise if no argument is passed (or portions is None)
         the entire display will be updated.
         """
-        if portions:
+        if portions is not None:
             pygame.display.update(portions)
         else:
             pygame.display.update()
-            
