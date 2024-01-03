@@ -4,3 +4,6 @@ src/plugins/__init__.py
 
 src/gameObjects
   * DispatchObj actually not used... think about it.
+
+README
+  * s/module/package/ ...dumb me!
