@@ -1,9 +1,3 @@
 
-src/plugins/__init__.py
-  * module imp deprecated, switch to importlib
-
 src/gameObjects
   * DispatchObj actually not used... think about it.
-
-README
-  * s/module/package/ ...dumb me!

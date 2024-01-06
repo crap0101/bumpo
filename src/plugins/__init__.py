@@ -7,18 +7,23 @@
 """
 Load plugins in bumpo.
 Custom classes to be used instead of baseObjects's GameObject or Shape
-must be derived from them (or subclasses of), or regiter themself
-within the GameObject or Shape abstract classes, respectively. (XXX+TODO not anymore)
+must be derived from them (or subclasses of).
 
 Each plugin module can have a module-level variable called "MODULE_PLUGINS"
 as a sequence of plugin's object names (a class, a function or whatever)
-which can be passed to the load_plugin function for get back the plugin object.
+which can be passed to the load_plugin function for get back the plugin object. # XX+TODO: review this
 
 """
 
+try:
+    import importlib
+    HAVE_IMPORTLIB = 1
+except ImportError:
+    import imp
+    HAVE_IMPORTLIB = 0
 import glob
-import imp
 import os
+import sys
 
 
 class LoadPluginError(Exception):
@@ -39,8 +44,43 @@ def get_module (module, paths=None):
     paths  => a sequence of paths in which search the module.
               If omitted or None, search in sys.path.
     """
-    file, path, descr = imp.find_module(module, paths)
-    return imp.load_module(module, file, path, descr)
+    # importlib mess... o.O
+    if HAVE_IMPORTLIB:
+        for path in list(paths):
+            for p in find_plugins(path):
+                spec = importlib.util.spec_from_file_location(module, p)
+                if spec is not None:
+                    mod = importlib.util.module_from_spec(spec)
+                    if mod is not None:
+                        sys.modules[module] = mod
+                        spec.loader.exec_module(mod)
+                        return mod
+    else:
+        file, path, descr = imp.find_module(module, paths)
+        return imp.load_module(module, file, path, descr)
+
+
+def find_plugins (path=None):
+    import fnmatch
+    if path is None:
+        path = os.path.dirname(__file__)
+    modules = [p for p in glob.glob(os.path.join(path, '*.py'))
+               if not fnmatch.fnmatch(p, '*/__init__.py')]
+    return tuple(modules)
+
+
+def find_plugin_modules (path=None):
+    """Returns a list of plugin modules found in path.
+
+    path => path to a directory containing plugin modules.
+            If not provided or None, search in the default
+            location.
+    """
+    if path is None:
+        path = os.path.dirname(__file__)
+    modules = [os.path.splitext(os.path.basename(f))[0]
+               for f in find_plugins(path)]
+    return tuple(modules)
 
 
 def load_plugin (name, module, paths=None):
@@ -53,30 +93,8 @@ def load_plugin (name, module, paths=None):
     paths  => a sequence of path in which search for the plugin. If omitted
               of None, default to sys.path.
     """
-    file = None
     try:
         mod = get_module(module, paths)
         return getattr(mod, name)
     except Exception as err:
         raise LoadPluginError(err)
-    finally:
-        if file:
-            file.close()
-
-
-def find_plugin_modules (path=None):
-    """Returns a list of plugin modules found in path.
-    
-    path => path to a directory containing plugin modules.
-            If not provided or None, search in the default
-            location.
-    """
-    if path is None:
-        path = os.path.dirname(__file__)
-    modules = [os.path.splitext(os.path.basename(f))[0]
-               for f in glob.glob(os.path.join(path, '*.py'))]
-    try:
-        modules.remove('__init__')
-    except ValueError:
-        pass
-    return tuple(modules)

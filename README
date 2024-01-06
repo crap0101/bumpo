@@ -1,4 +1,4 @@
-bumpo - module for create and manage game objects with pygame
+bumpo - package for create and manage game objects with pygame
 
 Requires: pygame >= 1.7
 
