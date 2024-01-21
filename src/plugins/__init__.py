@@ -38,7 +38,7 @@ def _load_plugin (name, module):
 
 
 def get_module (module, paths=None):
-    """Returns the module found in paths.
+    """Returns the module found in paths or None.
 
     module => module name to get.
     paths  => a sequence of paths in which search the module.
@@ -46,7 +46,7 @@ def get_module (module, paths=None):
     """
     # importlib mess... o.O
     if HAVE_IMPORTLIB:
-        for path in list(paths):
+        for path in list(paths or sys.path):
             for p in find_plugins(path):
                 spec = importlib.util.spec_from_file_location(module, p)
                 if spec is not None:
